@@ -1,5 +1,5 @@
 from process_dataset import process_dataset, fake_dataset
-from models import GCN
+from models import GCN, gfNN
 import torch.optim as optim
 import torch
 import wandb
@@ -15,8 +15,17 @@ num_anchors = 50
 threshold = 1
 data_loader, num_nodes = fake_dataset(num_nodes, num_anchors, threshold=threshold)
 
-# model = GCN(nfeat=num_nodes, nhid=128, nout=3, dropout=0.01)
-model = GCN(nfeat=num_nodes, nhid=2000, nout=2, dropout=0.5)
+modelname = "gfNN"
+# modelname = "GCN"
+
+if modelname == "gfNN":
+    model = gfNN(nfeat=num_nodes, nhid=1000, nout=2, dropout=0.5)
+elif modelname == "GCN":
+    # model = GCN(nfeat=num_nodes, nhid=128, nout=3, dropout=0.01)
+    model = GCN(nfeat=num_nodes, nhid=1000, nout=2, dropout=0.5)
+else:
+    raise NotImplementedError
+
 optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=0)
 loss_fn = torch.nn.MSELoss()
 
@@ -27,10 +36,16 @@ if wandb_log:
 
 start = time.time()
 for batch in data_loader:
+    if modelname == "gfNN":
+        x = torch.sparse.mm(batch.adj, batch.x)
+        # x = torch.sparse.mm(batch.adj, x)
     for epoch in range(200):
         model.train()
         optimizer.zero_grad()
-        pred = model(batch.x, batch.adj)
+        if modelname == "gfNN":
+            pred = model(x)
+        elif modelname == "GCN":
+            pred = model(batch.x, batch.adj)
         loss_val = loss_fn(pred[batch.nodes], batch.y[batch.nodes])
         loss_train = loss_fn(pred[batch.anchors], batch.y[batch.anchors])
         loss_train.backward()
@@ -46,7 +61,13 @@ if wandb_log:
     wandb.finish()
 
 model.eval()
-pred = model(batch.x, batch.adj)
+if modelname == "gfNN":
+    x = torch.sparse.mm(batch.adj, batch.x)
+    # x = torch.sparse.mm(batch.adj, x)
+if modelname == "gfNN":
+    pred = model(x)
+elif modelname == "GCN":
+    pred = model(batch.x, batch.adj)
 loss_test = loss_fn(pred[batch.nodes], batch.y[batch.nodes])
 print(f"test (RMSE):{torch.sqrt(loss_test).item()}")
 

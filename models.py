@@ -33,3 +33,18 @@ class GCN(nn.Module):
         x = F.dropout(x, self.dropout, training=self.training)
         x = self.gc2(x, adj)
         return x
+
+class gfNN(nn.Module):
+    def __init__(self, nfeat, nhid, nout, dropout):
+        super(gfNN, self).__init__()
+        self.linear1 = nn.Linear(nfeat, nhid)
+        self.linear2 = nn.Linear(nhid, nout)
+        self.dropout = dropout
+
+    def forward(self, x):
+        # x = torch.sparse.mm(adj, x)
+        # x = torch.sparse.mm(adj, x)
+        x = F.relu(self.linear1(x))
+        x = F.dropout(x, self.dropout, training=self.training)
+        x = self.linear2(x)
+        return x
