@@ -1,51 +1,57 @@
-from process_dataset import process_dataset
+from process_dataset import process_dataset, fake_dataset
 from models import GCN
 import torch.optim as optim
 import torch
 import wandb
+import time
+import matplotlib.pyplot as plt
 
-data_loader = process_dataset('datasets/comp1_clean.csv', batch_size=32)
-num_batches = len(data_loader)
-print(num_batches, "batches")
+# data_loader, num_nodes = process_dataset('datasets/comp1_clean.csv', batch_size=1, threshold=1000, fake_links=False)
+# num_batches = len(data_loader)
+# print(num_batches, "batches")
 
-model = GCN(nfeat=3, nhid=2000, nout=3, dropout=0.5)
+num_nodes = 1000
+num_anchors = 50
+threshold = 1
+data_loader, num_nodes = fake_dataset(num_nodes, num_anchors, threshold=threshold)
+
+# model = GCN(nfeat=num_nodes, nhid=128, nout=3, dropout=0.01)
+model = GCN(nfeat=num_nodes, nhid=2000, nout=2, dropout=0.5)
 optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=0)
 loss_fn = torch.nn.MSELoss()
 
-wandb_log = True
+wandb_log = False
 if wandb_log:
     wandb.init(project="GNN-localize", entity="lillyclark", config={})
-    wandb.run.name = "comp1_3layers"+"_"+wandb.run.id
+    wandb.run.name = "tmp"+"_"+wandb.run.id
 
-for epoch in range(1000):
-    for batch in data_loader:
-        # TODO hold 30% for testing
-        # assert (batch.x == batch.y).all()
-
+start = time.time()
+for batch in data_loader:
+    for epoch in range(200):
         model.train()
         optimizer.zero_grad()
-
-        pred = model(batch)
-
-        loss = loss_fn(pred, batch.y)
-        loss.backward()
+        pred = model(batch.x, batch.adj)
+        loss_val = loss_fn(pred[batch.nodes], batch.y[batch.nodes])
+        loss_train = loss_fn(pred[batch.anchors], batch.y[batch.anchors])
+        loss_train.backward()
         optimizer.step()
+        print(f"epoch:{epoch}, train:{loss_train.item()}, val:{loss_val.item()}")
 
         if wandb_log:
-            wandb.log({"loss":loss})
+            wandb.log({"loss_train":loss_train})
+            wandb.log({"loss_val":loss_val})
 
-    print(epoch, loss.item())
-
-print("")
+print(f"Done in {time.time()-start} seconds.")
 if wandb_log:
     wandb.finish()
 
-# model_name = 'comp1_100_epochs'
-# torch.save(model.state_dict(), "models/"+model_name)
+model.eval()
+pred = model(batch.x, batch.adj)
+loss_test = loss_fn(pred[batch.nodes], batch.y[batch.nodes])
+print(f"test (RMSE):{torch.sqrt(loss_test).item()}")
 
-for batch in data_loader:
-    model.eval()
-    pred = model(batch)
-    print(pred)
-    print(batch.y)
-    break
+plt.scatter(pred[:,0].detach().numpy(), pred[:,1].detach().numpy(), label="predicted")
+plt.scatter(batch.y[:,0].detach().numpy(), batch.y[:,1].detach().numpy(), label="actual")
+plt.legend()
+plt.title('GCN Localization')
+plt.show()
