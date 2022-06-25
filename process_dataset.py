@@ -31,7 +31,45 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0):
     adjacency_matrix = (noisy_distance_matrix<threshold).float()
     thresholded_noisy_distance_matrix  = noisy_distance_matrix
     thresholded_noisy_distance_matrix[thresholded_noisy_distance_matrix>threshold] = 0
-    features = normalize(thresholded_noisy_distance_matrix, p=1.0, dim=1)
+    # features = normalize(thresholded_noisy_distance_matrix, p=1.0, dim=1)
+    print("without normalizing features or thresholding or adding noise")
+    features = distance_matrix
+    normalized_adjacency_matrix = normalize(adjacency_matrix, p=1.0, dim=1)
+    anchor_mask = torch.zeros(num_nodes).bool()
+    node_mask = torch.zeros(num_nodes).bool()
+    for a in range(num_anchors):
+        anchor_mask[a] = True
+    for n in range(num_anchors,num_nodes):
+        node_mask[n] = True
+    # edge_index, edge_attr = torch_geometric.utils.dense_to_sparse(normalized_adjacency_matrix)
+    # data = Data(x=features.to_sparse(), edge_index=edge_index, edge_attr=edge_attr, y=true_locs, anchors=anchor_mask, nodes=node_mask)
+    data = Data(x=features.to_sparse(), adj=normalized_adjacency_matrix.to_sparse(), y=true_locs, anchors=anchor_mask, nodes=node_mask)
+    return DataLoader([data]), num_nodes
+
+def scoped_dataset(num_nodes, num_anchors, threshold=3, anchor_locs=None):
+    true_locs = torch.rand((num_nodes,2))*5
+    distance_matrix = torch.zeros((num_nodes, num_nodes))
+    for i in range(num_nodes):
+        for j in range(num_nodes):
+            d = pdist(true_locs[i].unsqueeze(0), true_locs[j].unsqueeze(0))
+            distance_matrix[i][j] = d
+    noise = torch.randn((num_nodes,num_nodes))*(0.04**0.5)
+    noise.fill_diagonal_(0)
+    noisy_distance_matrix = distance_matrix + noise
+
+    ref_points_per_node = threshold
+    features = torch.zeros((num_nodes, ref_points_per_node))
+    features = torch.zeros((num_nodes, num_nodes))
+    adjacency_matrix = torch.eye(num_nodes)
+    for i in range(num_nodes):
+        ind = np.argpartition(distance_matrix.numpy()[i][:num_anchors], ref_points_per_node)[:ref_points_per_node]
+        for ref, ref_point in enumerate(ind):
+            # features[i][ref] = distance_matrix[i][ref_point]
+            # features[i][ref+1] = ref_point
+            features[i][ref_point] = distance_matrix[i][ref_point]
+            adjacency_matrix[i][ref_point] = 1.0
+
+    # features = normalize(features, p=1.0, dim=1)
     normalized_adjacency_matrix = normalize(adjacency_matrix, p=1.0, dim=1)
     anchor_mask = torch.zeros(num_nodes).bool()
     node_mask = torch.zeros(num_nodes).bool()

@@ -1,4 +1,4 @@
-from process_dataset import process_dataset, fake_dataset
+from process_dataset import *
 from models import GCN, gfNN
 import torch.optim as optim
 import torch
@@ -12,18 +12,17 @@ import matplotlib.pyplot as plt
 
 num_nodes = 1000
 num_anchors = 50
-threshold = 1
-print("without normalizing features")
-data_loader, num_nodes = fake_dataset(num_nodes, num_anchors, threshold=threshold)
+threshold = 49
+data_loader, num_nodes = scoped_dataset(num_nodes, num_anchors, threshold=threshold)
 
-modelname = "GCN"
+modelname = "gfNN"
 # modelname = "GCN"
 
 if modelname == "gfNN":
     model = gfNN(nfeat=num_nodes, nhid=1000, nout=2, dropout=0.5)
 elif modelname == "GCN":
     # model = GCN(nfeat=num_nodes, nhid=128, nout=3, dropout=0.01)
-    model = GCN(nfeat=num_nodes, nhid=1000, nout=2, dropout=0.5)
+    model = GCN(nfeat=threshold, nhid=1000, nout=2, dropout=0.5)
 else:
     raise NotImplementedError
 
@@ -38,9 +37,10 @@ if wandb_log:
 start = time.time()
 for batch in data_loader:
     if modelname == "gfNN":
-        x = torch.sparse.mm(batch.adj, batch.x)
+        # x = torch.sparse.mm(batch.adj, batch.x)
         # x = torch.sparse.mm(batch.adj, x)
-    for epoch in range(500):
+        x = batch.x
+    for epoch in range(200):
         model.train()
         optimizer.zero_grad()
         if modelname == "gfNN":
@@ -63,8 +63,9 @@ if wandb_log:
 
 model.eval()
 if modelname == "gfNN":
-    x = torch.sparse.mm(batch.adj, batch.x)
+    # x = torch.sparse.mm(batch.adj, batch.x)
     # x = torch.sparse.mm(batch.adj, x)
+    x = batch.x
 if modelname == "gfNN":
     pred = model(x)
 elif modelname == "GCN":
@@ -75,5 +76,5 @@ print(f"test (RMSE):{torch.sqrt(loss_test).item()}")
 plt.scatter(pred[:,0].detach().numpy(), pred[:,1].detach().numpy(), label="predicted")
 plt.scatter(batch.y[:,0].detach().numpy(), batch.y[:,1].detach().numpy(), label="actual")
 plt.legend()
-plt.title('GCN Localization')
+plt.title('scoped')
 plt.show()
