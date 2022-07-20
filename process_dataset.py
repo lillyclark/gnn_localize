@@ -37,13 +37,15 @@ def modified_adj(num_nodes, num_anchors, threshold=1.0):
             distance_matrix[i][j] = d
     noise = torch.randn((num_nodes,num_nodes))*(0.04**0.5)
     noise.fill_diagonal_(0)
+    # make symmetric (TODO)
+    noise = (noise + noise.T)/2
     noisy_distance_matrix = distance_matrix + noise
 
+    adjacency_matrix = 1/((noisy_distance_matrix+1)**3)
+    print("adj:")
+    print(adjacency_matrix)
     thresholded_noisy_distance_matrix  = noisy_distance_matrix.clone()
     thresholded_noisy_distance_matrix[thresholded_noisy_distance_matrix>threshold] = 0
-    adjacency_matrix = 1/thresholded_noisy_distance_matrix
-    adjacency_matrix.fill_diagonal_(1)
-    adjacency_matrix = torch.nan_to_num(adjacency_matrix, nan=0.0, posinf=0.0, neginf=0.0)
     features = normalize(thresholded_noisy_distance_matrix, p=1.0, dim=1)
     normalized_adjacency_matrix = normalize(adjacency_matrix, p=1.0, dim=1)
 
@@ -55,7 +57,8 @@ def modified_adj(num_nodes, num_anchors, threshold=1.0):
         node_mask[n] = True
     # edge_index, edge_attr = torch_geometric.utils.dense_to_sparse(normalized_adjacency_matrix)
     # data = Data(x=features.to_sparse(), edge_index=edge_index, edge_attr=edge_attr, y=true_locs, anchors=anchor_mask, nodes=node_mask)
-    data = Data(x=features.to_sparse(), adj=normalized_adjacency_matrix.to_sparse(), y=true_locs, anchors=anchor_mask, nodes=node_mask)
+    # data = Data(x=features.to_sparse(), adj=normalized_adjacency_matrix.to_sparse(), y=true_locs, anchors=anchor_mask, nodes=node_mask)
+    data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
     return DataLoader([data]), num_nodes, noisy_distance_matrix
 
 def fake_dataset(num_nodes, num_anchors, threshold=1.0):
@@ -68,6 +71,8 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0):
             distance_matrix[i][j] = d
     noise = torch.randn((num_nodes,num_nodes))*(0.04**0.5)
     noise.fill_diagonal_(0)
+    # make symmetric (TODO)
+    noise = (noise + noise.T)/2
     noisy_distance_matrix = distance_matrix + noise
 
     adjacency_matrix = (noisy_distance_matrix<threshold).float()
@@ -85,6 +90,7 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0):
     # edge_index, edge_attr = torch_geometric.utils.dense_to_sparse(normalized_adjacency_matrix)
     # data = Data(x=features.to_sparse(), edge_index=edge_index, edge_attr=edge_attr, y=true_locs, anchors=anchor_mask, nodes=node_mask)
     data = Data(x=features.to_sparse(), adj=normalized_adjacency_matrix.to_sparse(), y=true_locs, anchors=anchor_mask, nodes=node_mask)
+    # data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
     return DataLoader([data]), num_nodes, noisy_distance_matrix
 
 def no_noise_dataset(num_nodes, num_anchors, threshold=1.0):
@@ -164,7 +170,7 @@ def process_dataset(filename, batch_size, threshold=1000, fake_links=False):
     nodes = tuple(transmitters.union(receivers))
 
     # debug
-    nodes = ('scom-husky2','scom-spot4','scom-spot3','scom-husky3','scom-husky1','scom12','scom-base1','scom-spot1')
+    # nodes = ('scom-husky2','scom-spot4','scom-spot3','scom-husky3','scom-husky1','scom12','scom-base1','scom-spot1')
 
     node_index = {}
     for node in nodes:
@@ -182,7 +188,7 @@ def process_dataset(filename, batch_size, threshold=1000, fake_links=False):
         distance_matrix = np.zeros((num_nodes, num_nodes))
         labels = np.zeros((num_nodes, 3))
         anchor_mask = torch.zeros(num_nodes).bool()
-        present_mask = torch.zeros(num_nodes).bool()
+        node_mask = torch.zeros(num_nodes).bool()
 
         edge_index_u = []
         edge_index_v = []
@@ -200,45 +206,45 @@ def process_dataset(filename, batch_size, threshold=1000, fake_links=False):
                 # debug
                 x = torch.Tensor([graph.iloc[j]['transmitter_x'], graph.iloc[j]['transmitter_y'], graph.iloc[j]['transmitter_z']])
                 y = torch.Tensor([graph.iloc[j]['receiver_x'], graph.iloc[j]['receiver_y'], graph.iloc[j]['receiver_z']])
-                distance_matrix[node_index[tx]][node_index[rx]] = pdist(x.unsqueeze(0), y.unsqueeze(0))
+                # distance_matrix[node_index[tx]][node_index[rx]] = pdist(x.unsqueeze(0), y.unsqueeze(0))
 
             labels[node_index[tx]] = graph.iloc[j]['transmitter_x'], graph.iloc[j]['transmitter_y'], graph.iloc[j]['transmitter_z']
             labels[node_index[rx]] = graph.iloc[j]['receiver_x'], graph.iloc[j]['receiver_y'], graph.iloc[j]['receiver_z']
 
-            anchor_mask[node_index[tx]] = is_anchor(tx)
-            present_mask[node_index[tx]] = True
+            for n in [tx, rx]:
+                if is_anchor(n):
+                    anchor_mask[node_index[n]] = True
+                else:
+                    node_mask[node_index[n]] = True
 
         distance_matrix = torch.Tensor(distance_matrix)
+        print("average links")
         labels = torch.Tensor(labels)
         edge_index = torch.Tensor([edge_index_u,edge_index_v]).long()
         edge_attr = torch.Tensor(edge_attr)
 
         # normalize
-        # print(distance_matrix)
+        print("distance matrix:")
+        print(distance_matrix)
         distance_matrix = normalize(distance_matrix, p=1.0, dim=1)
-        # print("after normalize:")
-        # print(distance_matrix)
+        print("after normalize:")
+        print(distance_matrix)
 
 
         adj = torch_geometric.utils.to_dense_adj(edge_index, edge_attr=edge_attr, max_num_nodes=num_nodes)
-        # print(adj)
-        adj = normalize(adj, p=1.0, dim=1)
-        # print("after normalize:")
-        # print(adj)
+        print("is the adjacency_matrix symmetric?")
+        print(torch.all(adj.transpose(0, 1) == adj))
+        print("adj:")
+        print(adj)
+        adj = normalize(adj+torch.eye(num_nodes), p=1.0, dim=1)
+        print("after normalize:")
+        print(adj)
         edge_index, edge_attr = torch_geometric.utils.dense_to_sparse(adj)
 
         # print(edge_attr)
 
-        graph_data = Data(x=distance_matrix, edge_index=edge_index, edge_attr=edge_attr, y=labels, anchors=anchor_mask, present=present_mask)
+        graph_data = Data(x=distance_matrix.to_sparse(), adj=adj, edge_index=edge_index, edge_attr=edge_attr, y=labels, anchors=anchor_mask, nodes=node_mask)
         graphs.append(graph_data)
-
-        # if present_mask.all():
-        #     print("********")
-        #     print(i)
-
-        # if i == 0:
-        #     print("stopping early")
-        #     break
 
     data_loader = DataLoader(graphs, batch_size=batch_size, shuffle=True)
     return data_loader, nodes
