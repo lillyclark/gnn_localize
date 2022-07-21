@@ -70,30 +70,36 @@ distance_matrix = matrix_from_locs(true_locs)
 noise = torch.randn((num_nodes,num_nodes))*(0.04**0.5)
 noise.fill_diagonal_(0)
 noisy_distance_matrix = distance_matrix + noise
-noisy_distance_matrix = (noisy_distance_matrix.T+noisy_distance_matrix)/2
+# noisy_distance_matrix = (noisy_distance_matrix.T+noisy_distance_matrix)/2
 
-# adj = (noisy_distance_matrix<threshold)
-# adj.fill_diagonal_(0)
-# print(adj)
-# indices = np.where(adj.numpy())[1].reshape(adj.shape[0],-1)
-# print(indices)
+print(np.round(noisy_distance_matrix,2))
 
-indices = neighbors(distance_matrix, 3)
-print(indices)
+from torch.nn.functional import normalize
+noisy_distance_matrix = normalize(noisy_distance_matrix, p=1.0, dim=1)
+print(np.round(noisy_distance_matrix,2))
 
-res = barycenter_weights(noisy_distance_matrix, indices, reg=1e-3)
-print(np.round(res,2))
+from process_dataset import normalize
+noisy_distance_matrix = normalize(noisy_distance_matrix, use_sparse=False)
+print(np.round(noisy_distance_matrix,2))
 
-print("sparse weights")
-mat = weight_to_mat(res, indices)
-print(mat)
+def test_this():
+    indices = neighbors(distance_matrix, 3)
+    print(indices)
 
-pred = np.dot(mat, true_locs)
+    res = barycenter_weights(noisy_distance_matrix, indices, reg=1e-5)
+    # res = barycenter_weights(distance_matrix, indices, reg=1e-5)
+    print(np.round(res,2))
 
-c = ["red","orange","green","blue"]
-for n in [0,1,2,3]:
-    plt.scatter(pred[n,0], pred[n,1], label=str(n), color=c[n])
-    plt.scatter(true_locs[n,0].detach().numpy(), true_locs[n,1].detach().numpy(), label=str(n)+"true", color=c[n], marker="x")
-plt.legend()
-plt.title('four nodes demo')
-plt.show()
+    print("sparse weights")
+    mat = weight_to_mat(res, indices)
+    print(mat)
+
+    pred = np.dot(mat, true_locs)
+
+    c = ["red","orange","green","blue"]
+    for n in [0,1,2,3]:
+        plt.scatter(pred[n,0], pred[n,1], label=str(n), color=c[n])
+        plt.scatter(true_locs[n,0].detach().numpy(), true_locs[n,1].detach().numpy(), label=str(n)+"true", color=c[n], marker="x")
+    plt.legend()
+    plt.title('four nodes demo')
+    plt.show()
