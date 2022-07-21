@@ -70,5 +70,31 @@ def barycenter_weights(distance_matrix, indices, reg=1e-5):
         B[i, :] = w / np.sum(w)
     return B
 
+def weight_to_mat(weights, indices):
+    n_samples, n_neighbors = indices.shape
+    mat = np.zeros((n_samples, n_samples))
+    for i, ind in enumerate(indices):
+        mat[i][ind] = weights[i]
+    return mat
+
 res = barycenter_weights(noisy_distance_matrix, indices, reg=1e-3)
 print(np.round(res,2))
+
+print("sparse weights")
+mat = weight_to_mat(res, indices)
+print(mat)
+
+pred = torch.rand((num_nodes,2))*5
+print(pred)
+for iter in range(10):
+    print("ITER",iter)
+    pred = np.dot(mat,pred)
+    print(pred)
+
+c = ["red","orange","green","blue"]
+for n in [0,1,2,3]:
+    plt.scatter(pred[n,0], pred[n,1], label=str(n), color=c[n])
+    plt.scatter(true_locs[n,0].detach().numpy(), true_locs[n,1].detach().numpy(), label=str(n)+"true", color=c[n], marker="x")
+plt.legend()
+plt.title('four nodes demo')
+plt.show()
