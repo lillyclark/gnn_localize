@@ -9,26 +9,6 @@ from scipy.sparse import eye, csr_matrix
 from scipy.sparse.linalg import eigsh
 from process_dataset import matrix_from_locs
 
-np.random.seed(1)
-torch.manual_seed(1)
-
-num_nodes = 4
-num_anchors = 3
-threshold = 10
-
-true_locs = torch.Tensor([[0,0],[0,2],[2,0],[2,2]])
-distance_matrix = matrix_from_locs(true_locs)
-noise = torch.randn((num_nodes,num_nodes))*(0.04**0.5)
-noise.fill_diagonal_(0)
-noisy_distance_matrix = distance_matrix + noise
-noisy_distance_matrix = (noisy_distance_matrix.T+noisy_distance_matrix)/2
-
-adj = (noisy_distance_matrix<threshold)
-adj.fill_diagonal_(0)
-print(adj)
-indices = np.where(adj.numpy())[1].reshape(adj.shape[0],-1)
-print(indices)
-
 def barycenter_weights1(X, Y, indices, reg=1e-5):
     n_samples, n_neighbors = indices.shape
     B = np.empty((n_samples, n_neighbors), dtype=X.dtype)
@@ -46,9 +26,6 @@ def barycenter_weights1(X, Y, indices, reg=1e-5):
         w = solve(G, v, sym_pos=True)
         B[i, :] = w / np.sum(w)
     return B
-
-# res = barycenter_weights1(true_locs.numpy(), true_locs.numpy(), indices)
-# print(np.round(res,2))
 
 def barycenter_weights(distance_matrix, indices, reg=1e-5):
     n_samples, n_neighbors = indices.shape
@@ -77,6 +54,33 @@ def weight_to_mat(weights, indices):
         mat[i][ind] = weights[i]
     return mat
 
+def neighbors(distance_matrix, n_neighbors):
+    indices = np.argsort(distance_matrix.numpy(), axis=1)
+    return indices[:,1:]
+
+np.random.seed(1)
+torch.manual_seed(1)
+
+num_nodes = 4
+num_anchors = 3
+threshold = 10
+
+true_locs = torch.Tensor([[0,0],[0,2],[2,0],[2,2]])
+distance_matrix = matrix_from_locs(true_locs)
+noise = torch.randn((num_nodes,num_nodes))*(0.04**0.5)
+noise.fill_diagonal_(0)
+noisy_distance_matrix = distance_matrix + noise
+noisy_distance_matrix = (noisy_distance_matrix.T+noisy_distance_matrix)/2
+
+# adj = (noisy_distance_matrix<threshold)
+# adj.fill_diagonal_(0)
+# print(adj)
+# indices = np.where(adj.numpy())[1].reshape(adj.shape[0],-1)
+# print(indices)
+
+indices = neighbors(distance_matrix, 3)
+print(indices)
+
 res = barycenter_weights(noisy_distance_matrix, indices, reg=1e-3)
 print(np.round(res,2))
 
@@ -84,12 +88,7 @@ print("sparse weights")
 mat = weight_to_mat(res, indices)
 print(mat)
 
-pred = torch.rand((num_nodes,2))*5
-print(pred)
-for iter in range(10):
-    print("ITER",iter)
-    pred = np.dot(mat,pred)
-    print(pred)
+pred = np.dot(mat, true_locs)
 
 c = ["red","orange","green","blue"]
 for n in [0,1,2,3]:
