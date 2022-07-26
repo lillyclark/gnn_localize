@@ -7,10 +7,22 @@ import time
 from torch_geometric.data import Data
 import torch_geometric
 from torch_geometric.loader import DataLoader
+import scipy.sparse as sp
 
-from torch.nn.functional import normalize
+# from torch.nn.functional import normalize
 
 pdist = torch.nn.PairwiseDistance(p=2)
+
+def normalize(x, use_sparse=True):
+    D = np.array(x.sum(1))
+    r_inv = np.power(D, -0.5).flatten()
+    r_inv[np.isinf(r_inv)] = 0.
+    if use_sparse:
+        r_mat_inv = sp.diags(r_inv)
+    else:
+        r_mat_inv = np.diag(r_inv)
+    mx = r_mat_inv.dot(x).dot(r_mat_inv)
+    return mx
 
 def matrix_from_locs(locs):
     num_nodes = locs.shape[0]
