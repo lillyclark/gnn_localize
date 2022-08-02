@@ -16,12 +16,13 @@ import numpy as np
 np.random.seed(0)
 torch.manual_seed(0)
 
-num_nodes = 10
-num_anchors = 4
+num_nodes = 100
+num_anchors = 20
 threshold = 1.2
-n_neighbors = 4
+n_neighbors = 10
 
-data_loader, num_nodes, noisy_distance_matrix = fake_dataset(num_nodes, num_anchors, threshold=threshold)
+# data_loader, num_nodes, noisy_distance_matrix = fake_dataset(num_nodes, num_anchors, threshold=threshold)
+data_loader, num_nodes, noisy_distance_matrix = nLOS_dataset(num_nodes, num_anchors, threshold=threshold)
 # data_loader, num_nodes = scoped_dataset(num_nodes, num_anchors, threshold=threshold)
 # data_loader, num_nodes, noisy_distance_matrix = modified_adj(num_nodes, num_anchors, threshold=threshold)
 
@@ -81,7 +82,7 @@ else:
         res = barycenter_weights(noisy_distance_matrix, indices, reg=1e-5)
         mat = torch.Tensor(weight_to_mat(res, indices))
 
-        for epoch in range(200):
+        for epoch in range(500):
             model.train()
             optimizer.zero_grad()
             if modelname == "gfNN":

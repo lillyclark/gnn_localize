@@ -112,6 +112,37 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0):
     # data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
     return DataLoader([data]), num_nodes, noisy_distance_matrix
 
+def nLOS_dataset(num_nodes, num_anchors, threshold=1.0):
+    true_locs = torch.rand((num_nodes,2))*5
+    distance_matrix = torch.zeros((num_nodes, num_nodes))
+    for i in range(num_nodes):
+        for j in range(num_nodes):
+            d = pdist(true_locs[i].unsqueeze(0), true_locs[j].unsqueeze(0))
+            distance_matrix[i][j] = d
+    noise = torch.randn((num_nodes,num_nodes))*(0.04**0.5)
+    noise.fill_diagonal_(0)
+    for i in range(int(num_nodes/10)):
+        noise[i][i+1] += 0.05
+    noisy_distance_matrix = distance_matrix + noise
+
+    adjacency_matrix = (noisy_distance_matrix<threshold).float()
+    thresholded_noisy_distance_matrix  = noisy_distance_matrix.clone()
+    thresholded_noisy_distance_matrix[thresholded_noisy_distance_matrix>threshold] = 0.0
+    features = normalize_tensor(thresholded_noisy_distance_matrix)
+    normalized_adjacency_matrix = normalize_tensor(adjacency_matrix)
+
+    anchor_mask = torch.zeros(num_nodes).bool()
+    node_mask = torch.zeros(num_nodes).bool()
+    for a in range(num_anchors):
+        anchor_mask[a] = True
+    for n in range(num_anchors,num_nodes):
+        node_mask[n] = True
+    # edge_index, edge_attr = torch_geometric.utils.dense_to_sparse(normalized_adjacency_matrix)
+    # data = Data(x=features.to_sparse(), edge_index=edge_index, edge_attr=edge_attr, y=true_locs, anchors=anchor_mask, nodes=node_mask)
+    data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
+    # data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
+    return DataLoader([data]), num_nodes, noisy_distance_matrix
+
 def no_noise_dataset(num_nodes, num_anchors, threshold=1.0):
     # nodes is total nodes, including anchors
     true_locs = torch.rand((num_nodes,2))*5

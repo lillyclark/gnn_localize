@@ -26,7 +26,6 @@ def reduce_rank(X,k=4):
 
 def denoise_via_SVD(euclidean_matrix,k=4,fill_diag=False,take_sqrt=False):
     x = euclidean_matrix
-    # x = (x+x.T)/2
     new_x = torch.Tensor(reduce_rank(x,k))
     if fill_diag:
         new_x.fill_diagonal_(0)

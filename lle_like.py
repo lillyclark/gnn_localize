@@ -51,6 +51,7 @@ def barycenter_weights(distance_matrix, indices, reg=1e-5, dont_square=False):
         try:
             w = solve(C, v, assume_a='pos')
         except np.linalg.LinAlgError:
+            # print('in barycenter_weights, matrix C is singular -> use least squares')
             w, res, rnk, s = lstsq(C, v)
         B[i, :] = w / np.sum(w)
     return B
