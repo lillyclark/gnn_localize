@@ -19,8 +19,9 @@ torch.manual_seed(0)
 num_nodes = 100
 num_anchors = 20
 threshold = 1.2
-n_neighbors = 10
+n_neighbors = 20
 
+start = time.time()
 # data_loader, num_nodes, noisy_distance_matrix = fake_dataset(num_nodes, num_anchors, threshold=threshold)
 data_loader, num_nodes, noisy_distance_matrix = nLOS_dataset(num_nodes, num_anchors, threshold=threshold)
 # data_loader, num_nodes = scoped_dataset(num_nodes, num_anchors, threshold=threshold)
@@ -31,6 +32,9 @@ modelname = "GCN"
 # modelname = "GAT"
 # modelname = "LLE"
 
+print("loaded dataset, using model",modelname)
+print(f"{time.time()-start} seconds")
+
 # loss_fn = torch.nn.MSELoss()
 loss_fn = torch.nn.L1Loss()
 
@@ -40,19 +44,19 @@ if modelname == "LLE":
         reduce_rank = True
         if reduce_rank:
             euclidean_matrix = noisy_distance_matrix**2
+            start = time.time()
             noisy_distance_matrix = denoise_via_SVD(euclidean_matrix,k=4,fill_diag=False,take_sqrt=False)
+            print(f"{time.time()-start} seconds to do rank reduction")
+            start = time.time()
             pred = solve_like_LLE(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_matrix,dont_square=True)
+            print(f"{time.time()-start} seconds to solve")
         else:
+            start = time.time()
             pred = solve_like_LLE(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_matrix,dont_square=False)
+            print(f"{time.time()-start} seconds to solve")
         pred = torch.Tensor(pred)
     loss_test = loss_fn(pred[batch.nodes], batch.y[batch.nodes])
     print(f"test (RMSE):{torch.sqrt(loss_test).item()}")
-
-    plt.scatter(pred[:,0].detach().numpy(), pred[:,1].detach().numpy(), label="predicted")#,alpha=0.1)
-    plt.scatter(batch.y[:,0].detach().numpy(), batch.y[:,1].detach().numpy(), label="actual")#,alpha=0.1)
-    plt.legend()
-    plt.title('GCN Localization (LLE)')
-    plt.show()
 
 else:
     if modelname == "gfNN":
@@ -78,10 +82,6 @@ else:
             x = torch.sparse.mm(batch.adj, batch.x)
             # x = torch.sparse.mm(batch.adj, x)
 
-        indices = neighbors(noisy_distance_matrix, n_neighbors)
-        res = barycenter_weights(noisy_distance_matrix, indices, reg=1e-5)
-        mat = torch.Tensor(weight_to_mat(res, indices))
-
         for epoch in range(500):
             model.train()
             optimizer.zero_grad()
@@ -93,10 +93,9 @@ else:
             # pred_matrix = matrix_from_locs(pred)
             loss_val = loss_fn(pred[batch.nodes], batch.y[batch.nodes])
             loss_train = loss_fn(pred[batch.anchors], batch.y[batch.anchors])# + loss_fn(pred_matrix, noisy_distance_matrix)
-            # loss_train = loss_fn(pred, torch.mm(mat,pred)) + loss_fn(pred[batch.anchors], batch.y[batch.anchors])
             loss_train.backward()
             optimizer.step()
-            print(f"epoch:{epoch}, train:{loss_train.item()}, val:{loss_val.item()}")
+            # print(f"epoch:{epoch}, train:{loss_train.item()}, val:{loss_val.item()}")
 
             if wandb_log:
                 wandb.log({"loss_train":loss_train})
@@ -117,9 +116,10 @@ else:
     loss_test = loss_fn(pred[batch.nodes], batch.y[batch.nodes])
     print(f"test (RMSE):{torch.sqrt(loss_test).item()}")
 
-    plt.scatter(pred[:,0].detach().numpy(), pred[:,1].detach().numpy(), label="predicted")
-    # plt.scatter(batch.y[:,0][batch.a].detach().numpy(), batch.y[:,1].detach().numpy(), label="actual")
-    plt.scatter(batch.y[:,0].detach().numpy(), batch.y[:,1].detach().numpy(), label="actual")
-    plt.legend()
-    plt.title('train.py')
-    plt.show()
+plt.scatter(pred[:num_anchors,0].detach().numpy(), pred[:num_anchors,1].detach().numpy(), label="predicted a", marker="+",color="blue")#,alpha=0.1)
+plt.scatter(batch.y[:num_anchors,0].detach().numpy(), batch.y[:num_anchors,1].detach().numpy(), label="actual a", marker="x",color="orange")#,alpha=0.1)
+plt.scatter(pred[num_anchors:,0].detach().numpy(), pred[num_anchors:,1].detach().numpy(), label="predicted",color="blue")#,alpha=0.1)
+plt.scatter(batch.y[num_anchors:,0].detach().numpy(), batch.y[num_anchors:,1].detach().numpy(), label="actual",color="orange")#,alpha=0.1)
+plt.legend()
+plt.title(f"{modelname}: {np.round(torch.sqrt(loss_test).item(),2)}")
+plt.show()

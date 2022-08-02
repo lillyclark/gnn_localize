@@ -176,13 +176,17 @@ def solve_like_LLE(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_
     # np.random.seed(1)
     # torch.manual_seed(1)
     indices = neighbors(noisy_distance_matrix, n_neighbors)
+    start = time.time()
     res = barycenter_weights(noisy_distance_matrix, indices, reg=1e-3,dont_square=dont_square)
+    print(f"{time.time()-start} to find weight mat")
     mat = weight_to_mat(res, indices)
     I_minus_W = np.eye(num_nodes)-mat
     RHS = I_minus_W[:,:num_anchors]
     RHS = RHS.dot(anchor_locs)
     LHS = -1*I_minus_W[:,num_anchors:]
+    start = time.time()
     node_locs, res, rnk, s = lstsq(LHS, RHS)
+    print(f"{time.time()-start} to find locs")
     pred = np.vstack((anchor_locs,node_locs))
     return pred
 
