@@ -24,6 +24,13 @@ def normalize(x, use_sparse=True):
     mx = r_mat_inv.dot(x).dot(r_mat_inv)
     return mx
 
+def normalize_tensor(x):
+    D = x.sum(1)
+    r_inv = (D**-0.5).flatten()
+    r_mat_inv = torch.diag(r_inv)
+    mx = torch.mm(torch.mm(r_mat_inv,x),r_mat_inv)
+    return mx
+
 def matrix_from_locs(locs):
     num_nodes = locs.shape[0]
     distance_matrix = torch.zeros((num_nodes, num_nodes))
@@ -89,9 +96,9 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0):
 
     adjacency_matrix = (noisy_distance_matrix<threshold).float()
     thresholded_noisy_distance_matrix  = noisy_distance_matrix.clone()
-    thresholded_noisy_distance_matrix[thresholded_noisy_distance_matrix>threshold] = 0
-    features = normalize(thresholded_noisy_distance_matrix, p=1.0, dim=1)
-    normalized_adjacency_matrix = normalize(adjacency_matrix, p=1.0, dim=1)
+    thresholded_noisy_distance_matrix[thresholded_noisy_distance_matrix>threshold] = 0.0
+    features = normalize_tensor(thresholded_noisy_distance_matrix)
+    normalized_adjacency_matrix = normalize_tensor(adjacency_matrix)
 
     anchor_mask = torch.zeros(num_nodes).bool()
     node_mask = torch.zeros(num_nodes).bool()
@@ -101,7 +108,7 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0):
         node_mask[n] = True
     # edge_index, edge_attr = torch_geometric.utils.dense_to_sparse(normalized_adjacency_matrix)
     # data = Data(x=features.to_sparse(), edge_index=edge_index, edge_attr=edge_attr, y=true_locs, anchors=anchor_mask, nodes=node_mask)
-    data = Data(x=features.to_sparse(), adj=normalized_adjacency_matrix.to_sparse(), y=true_locs, anchors=anchor_mask, nodes=node_mask)
+    data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
     # data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
     return DataLoader([data]), num_nodes, noisy_distance_matrix
 

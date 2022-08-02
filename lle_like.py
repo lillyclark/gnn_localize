@@ -8,6 +8,8 @@ from scipy.linalg import eigh, svd, qr, solve, lstsq
 from scipy.sparse import eye, csr_matrix
 from scipy.sparse.linalg import eigsh
 from process_dataset import matrix_from_locs
+from decomposition import normalize_tensor, reduce_rank, denoise_via_SVD
+
 
 # def barycenter_weights1(X, Y, indices, reg=1e-5):
 #     n_samples, n_neighbors = indices.shape
@@ -27,7 +29,7 @@ from process_dataset import matrix_from_locs
 #         B[i, :] = w / np.sum(w)
 #     return B
 
-def barycenter_weights(distance_matrix, indices, reg=1e-5):
+def barycenter_weights(distance_matrix, indices, reg=1e-5, dont_square=False):
     n_samples, n_neighbors = indices.shape
     B = np.empty((n_samples, n_neighbors))
     v = np.ones(n_neighbors)
@@ -36,7 +38,10 @@ def barycenter_weights(distance_matrix, indices, reg=1e-5):
         C = np.empty((n_neighbors, n_neighbors))
         for j in range(n_neighbors):
             for k in range(n_neighbors):
-                C[j][k] = (D[i][ind[k]]**2 + D[ind[j]][i]**2 - D[ind[j]][ind[k]]**2)/2
+                if dont_square:
+                    C[j][k] = (D[i][ind[k]] + D[ind[j]][i] - D[ind[j]][ind[k]])/2
+                else:
+                    C[j][k] = (D[i][ind[k]]**2 + D[ind[j]][i]**2 - D[ind[j]][ind[k]]**2)/2
         trace = np.trace(C)
         if trace > 0:
             R = reg * trace
@@ -143,7 +148,7 @@ def test_solve_10():
     torch.manual_seed(1)
 
     num_nodes = 10
-    num_anchors = 5
+    num_anchors = 3
     n_neighbors = 9
 
     true_locs = torch.Tensor([[0,0],[0,2],[2,0],[2,2],[1,1],[0,1],[1,0],[1,2],[2,1],[-1,-1]])
@@ -153,32 +158,31 @@ def test_solve_10():
     noisy_distance_matrix = distance_matrix + noise
     noisy_distance_matrix = (noisy_distance_matrix.T+noisy_distance_matrix)/2
 
-    indices = neighbors(noisy_distance_matrix, n_neighbors)
-    print(indices)
-
-    res = barycenter_weights(noisy_distance_matrix, indices, reg=1e-5)
-    print(np.round(res,2))
-
-    print("sparse weights")
-    mat = weight_to_mat(res, indices)
-    print(mat)
-
-    I_minus_W = np.eye(num_nodes)-mat
-    RHS = I_minus_W[:,:num_anchors]
-    RHS = RHS.dot(true_locs[:num_anchors])
-
-    LHS = -1*I_minus_W[:,num_anchors:]
-
-    node_locs, res, rnk, s = lstsq(LHS, RHS)
-
-    pred = np.vstack((true_locs[:num_anchors],node_locs))
+    euclidean_matrix = noisy_distance_matrix**2
+    noisy_distance_matrix = denoise_via_SVD(euclidean_matrix,k=4,fill_diag=False,take_sqrt=False)
+    pred = solve_like_LLE(num_nodes, num_anchors, n_neighbors, true_locs[:num_anchors], noisy_distance_matrix, dont_square=True)
 
     c = ["red","orange","yellow","green","blue","pink","purple","cyan","magenta","grey"]
     for n in range(num_nodes):
         plt.scatter(pred[n,0], pred[n,1], label=str(n), color=c[n])
         plt.scatter(true_locs[n,0].detach().numpy(), true_locs[n,1].detach().numpy(), label=str(n)+" true", color=c[n], marker="x")
     plt.legend()
-    plt.title('ten nodes demo')
+    plt.title('solve like LLE')
     plt.show()
 
-test_solve_10()
+
+def solve_like_LLE(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_matrix,dont_square=False):
+    # np.random.seed(1)
+    # torch.manual_seed(1)
+    indices = neighbors(noisy_distance_matrix, n_neighbors)
+    res = barycenter_weights(noisy_distance_matrix, indices, reg=1e-3,dont_square=dont_square)
+    mat = weight_to_mat(res, indices)
+    I_minus_W = np.eye(num_nodes)-mat
+    RHS = I_minus_W[:,:num_anchors]
+    RHS = RHS.dot(anchor_locs)
+    LHS = -1*I_minus_W[:,num_anchors:]
+    node_locs, res, rnk, s = lstsq(LHS, RHS)
+    pred = np.vstack((anchor_locs,node_locs))
+    return pred
+
+# test_solve_10()
