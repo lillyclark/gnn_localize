@@ -43,7 +43,10 @@ def denoise_via_adj(noisy_distance_matrix,K,threshold=1.2,normalize=False):
     thresholded_noisy_distance_matrix[thresholded_noisy_distance_matrix>threshold] = 0.0
     new_x = thresholded_noisy_distance_matrix
     for i in range(K):
-        new_x = torch.mm(adjacency_matrix,new_x)
+        if normalize:
+            new_x = normalize_tensor(torch.mm(adjacency_matrix,new_x))
+        else:
+            new_x = torch.mm(adjacency_matrix,new_x)
     print("new rank:",np.linalg.matrix_rank(new_x))
     return new_x, adjK, thresholded_noisy_distance_matrix
 
@@ -113,7 +116,7 @@ if __name__=="__main__":
         # plt.show()
 
         fig, axes = plt.subplots(1,6)
-        K=1000000
+        K=100
         axes[0].imshow(noisy_distance_matrix)
         axes[0].set_title('Dist')
         y, adj, dist_thr = denoise_via_adj(noisy_distance_matrix,K=1,normalize=True)
@@ -128,26 +131,23 @@ if __name__=="__main__":
         axes[4].set_title('Adj^'+str(K)+' @ Dist_thr')
         axes[5].imshow(1/(1+noisy_distance_matrix))
         axes[5].set_title('Similarity (1/(1+Dist))')
+        print(np.round(yK.numpy(),2))
         plt.show()
 
-        fig, axes = plt.subplots(1,4)
-        axes[0].imshow(adjK)
-        axes[0].set_title('Adj^'+str(K))
-        axes[1].imshow(yK)
-        axes[1].set_title('Adj^'+str(K)+' @ Dist_thr')
-        lambda_dist_thr, u_dist_thr = np.linalg.eig(dist_thr)
-        axes[2].imshow(u_dist_thr)
-        axes[2].set_title('Eigenvalues of Dist_thr')
+        # fig, axes = plt.subplots(1,4)
+        # axes[0].imshow(adjK)
+        # axes[0].set_title('Adj^'+str(K))
+        # axes[1].imshow(yK)
+        # axes[1].set_title('Adj^'+str(K)+' @ Dist_thr')
+        # lambda_dist_thr, u_dist_thr = np.linalg.eig(dist_thr)
+        # axes[2].imshow(u_dist_thr)
+        # axes[2].set_title('Eigenvalues of Dist_thr')
         lambda_adj, u_adj = np.linalg.eig(adj)
-        axes[3].imshow(u_adj)
-        axes[3].set_title('Eigenvalues of Adj')
-        plt.show()
-
-        print(u_dist_thr)
-        print(lambda_dist_thr)
-
-        print(u_adj)
-        print(lambda_adj)
+        print(np.round(lambda_adj,2))
+        print(np.round(u_adj,2))
+        # axes[3].imshow(u_adj)
+        # axes[3].set_title('Eigenvalues of Adj')
+        # plt.show()
 
 
     # for batch in data_loader:

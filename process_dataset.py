@@ -9,6 +9,8 @@ import torch_geometric
 from torch_geometric.loader import DataLoader
 import scipy.sparse as sp
 
+from scipy.io import loadmat
+
 # from torch.nn.functional import normalize
 
 pdist = torch.nn.PairwiseDistance(p=2)
@@ -27,6 +29,7 @@ def normalize(x, use_sparse=True):
 def normalize_tensor(x):
     D = x.sum(1)
     r_inv = (D**-0.5).flatten()
+    r_inv[torch.isnan(r_inv)]=0
     r_mat_inv = torch.diag(r_inv)
     mx = torch.mm(torch.mm(r_mat_inv,x),r_mat_inv)
     return mx
@@ -80,6 +83,54 @@ def modified_adj(num_nodes, num_anchors, threshold=1.0):
     data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
     return DataLoader([data]), num_nodes, noisy_distance_matrix
 
+def their_dataset(num_nodes, num_anchor, threshold=1.0):
+    # m = loadmat("./GNN-For-localization/Networks/8anchor_1000agent_0PercentNLOS_smallLOS.mat")
+    m = loadmat("./GNN-For-localization/Networks/8anchor_1000agent_10PercentNLOS_mediumLOS.mat")
+    Range_Mat = m["Range_Mat"][:num_nodes,:num_nodes]
+    Dist_Mat = m["Dist_Mat"][:num_nodes,:num_nodes]
+    labels = m["nodes"][:num_nodes]
+    Range = Range_Mat.copy()
+    Range[Range > threshold] = 0
+    Range_tem = Range.copy()
+    Range_tem[Range_tem > 0] = 1
+
+    features = sp.csr_matrix(Range, dtype=np.float64)
+    Adj = sp.csr_matrix(Range_tem, dtype=np.float64)
+
+    def normalize(mx):
+        """Row-normalize sparse matrix"""
+        rowsum = np.array(mx.sum(1))
+        r_inv = np.power(rowsum, -1).flatten()
+        r_inv[np.isinf(r_inv)] = 0.
+        r_mat_inv = sp.diags(r_inv)
+        mx = r_mat_inv.dot(mx)
+        return mx
+
+    features = normalize(features)
+    adj = normalize(Adj + sp.eye(Adj.shape[0]))
+
+    def sparse_mx_to_torch_sparse_tensor(sparse_mx):
+        """Convert a scipy sparse matrix to a torch sparse tensor."""
+        sparse_mx = sparse_mx.tocoo().astype(np.float32)
+        indices = torch.from_numpy(
+            np.vstack((sparse_mx.row, sparse_mx.col)).astype(np.int64))
+        values = torch.from_numpy(sparse_mx.data)
+        shape = torch.Size(sparse_mx.shape)
+        return torch.sparse.FloatTensor(indices, values, shape)
+
+    features = sparse_mx_to_torch_sparse_tensor(features)
+    true_locs = torch.FloatTensor(labels)
+    normalized_adjacency_matrix = sparse_mx_to_torch_sparse_tensor(adj)
+
+    anchor_mask = torch.zeros(num_nodes).bool()
+    node_mask = torch.zeros(num_nodes).bool()
+    for a in range(num_anchor):
+        anchor_mask[a] = True
+    for n in range(num_anchor,num_nodes):
+        node_mask[n] = True
+    data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
+    return DataLoader([data]), num_nodes, Range_Mat
+
 def fake_dataset(num_nodes, num_anchors, threshold=1.0):
     # nodes is total nodes, including anchors
     true_locs = torch.rand((num_nodes,2))*5
@@ -88,10 +139,8 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0):
         for j in range(num_nodes):
             d = pdist(true_locs[i].unsqueeze(0), true_locs[j].unsqueeze(0))
             distance_matrix[i][j] = d
-    noise = torch.randn((num_nodes,num_nodes))*(0.04**0.5)
+    noise = torch.randn((num_nodes,num_nodes))*(0.5**0.5)
     noise.fill_diagonal_(0)
-    # make symmetric (TODO)
-    noise = (noise + noise.T)/2
     noisy_distance_matrix = distance_matrix + noise
 
     adjacency_matrix = (noisy_distance_matrix<threshold).float()
@@ -123,6 +172,10 @@ def nLOS_dataset(num_nodes, num_anchors, threshold=1.0):
     noise.fill_diagonal_(0)
     for i in range(int(num_nodes/10)):
         noise[i][i+1] += 0.05
+
+    for j in range(int(num_nodes/10)+1,2*int(num_nodes/10)):
+        noise[j][j+1] += 5
+
     noisy_distance_matrix = distance_matrix + noise
 
     adjacency_matrix = (noisy_distance_matrix<threshold).float()

@@ -1,6 +1,6 @@
 from process_dataset import *
 from models import *
-from lle_like import solve_like_LLE, neighbors, barycenter_weights, weight_to_mat
+from lle_like import solve_like_LLE, neighbors, barycenter_weights, weight_to_mat, solve_with_LRR
 from decomposition import normalize_tensor, reduce_rank, denoise_via_SVD
 import torch.optim as optim
 import torch
@@ -19,26 +19,44 @@ torch.manual_seed(0)
 num_nodes = 100
 num_anchors = 20
 threshold = 1.2
-n_neighbors = 20
+n_neighbors = 4
 
 start = time.time()
+data_loader, num_nodes, noisy_distance_matrix = their_dataset(num_nodes, num_anchors, threshold=threshold)
 # data_loader, num_nodes, noisy_distance_matrix = fake_dataset(num_nodes, num_anchors, threshold=threshold)
-data_loader, num_nodes, noisy_distance_matrix = nLOS_dataset(num_nodes, num_anchors, threshold=threshold)
+# data_loader, num_nodes, noisy_distance_matrix = nLOS_dataset(num_nodes, num_anchors, threshold=threshold)
 # data_loader, num_nodes = scoped_dataset(num_nodes, num_anchors, threshold=threshold)
 # data_loader, num_nodes, noisy_distance_matrix = modified_adj(num_nodes, num_anchors, threshold=threshold)
 
 
-modelname = "GCN"
+# modelname = "GCN"
 # modelname = "GAT"
 # modelname = "LLE"
+modelname = "LRR"
 
 print("loaded dataset, using model",modelname)
 print(f"{time.time()-start} seconds")
 
-# loss_fn = torch.nn.MSELoss()
-loss_fn = torch.nn.L1Loss()
 
-if modelname == "LLE":
+loss_fn = torch.nn.MSELoss()
+# loss_fn = torch.nn.L1Loss()
+
+if modelname == "LRR":
+    assert n_neighbors > 3
+    print("local rank reduction")
+    print("n_neighbors =",n_neighbors)
+    for batch in data_loader:
+        anchor_locs = batch.y[batch.anchors]
+        euclidean_matrix = torch.Tensor(noisy_distance_matrix**2)
+        start = time.time()
+        pred = solve_with_LRR(num_nodes,num_anchors,n_neighbors,anchor_locs,euclidean_matrix,dont_square=True)
+        pred = torch.Tensor(pred)
+        print(f"{time.time()-start} seconds to solve")
+    loss_test = loss_fn(pred[batch.nodes], batch.y[batch.nodes])
+    print(f"test (RMSE):{torch.sqrt(loss_test).item()}")
+
+elif modelname == "LLE":
+    print("n_neighbors =",n_neighbors)
     for batch in data_loader:
         anchor_locs = batch.y[batch.anchors]
         reduce_rank = True
@@ -51,6 +69,7 @@ if modelname == "LLE":
             pred = solve_like_LLE(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_matrix,dont_square=True)
             print(f"{time.time()-start} seconds to solve")
         else:
+            noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
             start = time.time()
             pred = solve_like_LLE(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_matrix,dont_square=False)
             print(f"{time.time()-start} seconds to solve")
@@ -63,7 +82,7 @@ else:
         model = gfNN(nfeat=num_nodes, nhid=1000, nout=2, dropout=0.5)
     elif modelname == "GCN":
         # model = GCN(nfeat=num_nodes, nhid=128, nout=3, dropout=0.01)
-        model = GCN(nfeat=num_nodes, nhid=200, nout=2, dropout=0.5)
+        model = GCN(nfeat=num_nodes, nhid=2000, nout=2, dropout=0.5)
     elif modelname == "GAT":
         model = GAT(nfeat=num_nodes, nhid=200, nout=2, dropout=0.5)
     else:
@@ -82,7 +101,7 @@ else:
             x = torch.sparse.mm(batch.adj, batch.x)
             # x = torch.sparse.mm(batch.adj, x)
 
-        for epoch in range(500):
+        for epoch in range(200):
             model.train()
             optimizer.zero_grad()
             if modelname == "gfNN":
@@ -95,7 +114,8 @@ else:
             loss_train = loss_fn(pred[batch.anchors], batch.y[batch.anchors])# + loss_fn(pred_matrix, noisy_distance_matrix)
             loss_train.backward()
             optimizer.step()
-            # print(f"epoch:{epoch}, train:{loss_train.item()}, val:{loss_val.item()}")
+            if epoch % 20 == 0:
+                print(f"epoch:{epoch}, train:{loss_train.item()}, val:{loss_val.item()}")
 
             if wandb_log:
                 wandb.log({"loss_train":loss_train})
