@@ -131,6 +131,31 @@ def their_dataset(num_nodes, num_anchor, threshold=1.0):
     data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
     return DataLoader([data]), num_nodes, Range_Mat
 
+def separable_dataset(num_nodes, num_anchors):
+    true_locs = torch.rand((num_nodes,2))*5
+    # true_locs[0] = torch.Tensor([0,0])
+    # true_locs[1] = torch.Tensor([0,1])
+    # true_locs[2] = torch.Tensor([1,0])
+    k0 = 4
+    distance_matrix = torch.Tensor(matrix_from_locs(true_locs))
+    # noise = torch.randn((num_nodes,num_nodes))*(0.04**0.5)
+    noise = torch.randn((num_nodes,num_nodes))*(0.0**0.5)
+    print("zero-mean noise variance is ",0.0)
+    noise.fill_diagonal_(0)
+    p_nLOS = 0/10
+    print("prob of nLOS is",p_nLOS)
+    nLOS = np.random.choice([0, 1], size=(num_nodes,num_nodes), p=[1-p_nLOS, p_nLOS])
+    nLOS = torch.Tensor(nLOS)
+    nLOS.fill_diagonal_(0)
+    k1 = int(torch.sum(nLOS).item())
+    print("nLOS noise is U[0,10]")
+    nLOS_noise = torch.rand((num_nodes,num_nodes))*10
+    # print("nLOS noise is 10s")
+    # nLOS_noise = torch.ones((num_nodes,num_nodes))*10
+    nLOS = nLOS*nLOS_noise
+    measured = distance_matrix+noise+nLOS
+    return true_locs, distance_matrix, k0, noise, nLOS, k1, measured
+
 def fake_dataset(num_nodes, num_anchors, threshold=1.0):
     # nodes is total nodes, including anchors
     true_locs = torch.rand((num_nodes,2))*5

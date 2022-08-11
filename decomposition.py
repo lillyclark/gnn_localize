@@ -6,10 +6,12 @@ import wandb
 import time
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy.linalg import det
 from sklearn import manifold
 from sklearn.metrics import euclidean_distances
 from sklearn.decomposition import PCA
 from scipy.sparse.linalg import svds
+from scipy.linalg import eigh, svd, qr, solve, lstsq
 
 def normalize_tensor(x):
     D = x.sum(1)
@@ -18,8 +20,9 @@ def normalize_tensor(x):
     mx = torch.mm(torch.mm(r_mat_inv,x),r_mat_inv)
     return mx
 
-def reduce_rank(X,k=4):
-    X=(X+X.T)/2
+def reduce_rank(X,k=4,make_sym=False):
+    if make_sym:
+        X=(X+X.T)/2
     U, S, V = svds(X,k)
     X_ = U.dot(np.diag(S)).dot(V)
     return X_
@@ -49,6 +52,65 @@ def denoise_via_adj(noisy_distance_matrix,K,threshold=1.2,normalize=False):
             new_x = torch.mm(adjacency_matrix,new_x)
     print("new rank:",np.linalg.matrix_rank(new_x))
     return new_x, adjK, thresholded_noisy_distance_matrix
+
+def solve_direct(noisy_distance_matrix, anchor_locs, mode="None"):
+    x = noisy_distance_matrix
+    num_nodes = x.shape[0]
+    num_anchors = anchor_locs.shape[0]
+    M = np.zeros(x.shape)
+    for i in range(num_nodes):
+        for j in range(num_nodes):
+            M[i][j] = (x[0][j]**2 + x[i][0]**2 - x[i][j]**2)/2
+    q, v = np.linalg.eig(M)
+    locs = np.zeros((num_nodes,2))
+    print(q[0],q[1])
+    locs[:,0] = np.sqrt(q[0])*v[:,0]
+    locs[:,1] = np.sqrt(q[1])*v[:,1]
+    print("locs[0]",locs[0])
+
+    if mode == "None":
+        pass
+
+    if mode == "Kabsch":
+        A = anchor_locs.numpy()
+        B = locs[:num_anchors]
+        n, m = A.shape
+        EA = np.mean(A, axis=0)
+        EB = np.mean(B, axis=0)
+        print("EA:",EA)
+        print("EB:",EB)
+        VarA = np.mean(np.linalg.norm(A - EA, axis=1) ** 2)
+        print("VarA:",VarA)
+        H = ((A - EA).T @ (B - EB)) / n
+        U, D, VT = np.linalg.svd(H)
+
+        # TRY d = 1
+        d = 1
+        S_pos = np.diag([1] * (m - 1) + [d])
+        c_pos = VarA / np.trace(np.diag(D) @ S_pos)
+
+        # TRY d = 1
+        d = -1
+        S_neg = np.diag([1] * (m - 1) + [d])
+        c_neg = VarA / np.trace(np.diag(D) @ S_neg)
+
+        if abs(c_pos - 1) < abs(c_neg - 1):
+            S, c = S_pos, c_pos
+        else:
+            S, c = S_neg, c_neg
+
+        R = U @ S @ VT
+        print("D:",D)
+        print("S:",S)
+        print("np.trace(np.diag(D) @ S):", np.trace(np.diag(D) @ S))
+        t = EA - c * R @ EB
+        print("***")
+        print("rotation, scale, translation")
+        print(R, c, t)
+        print("***")
+        locs = np.array([t + c * R @ b for b in locs])
+
+    return torch.Tensor(locs)
 
 if __name__=="__main__":
     np.random.seed(0)
