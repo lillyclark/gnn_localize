@@ -105,10 +105,10 @@ if __name__=="__main__":
     # print("n_init:",n_init)
     # X, Y, ff = separate_dataset_multiple_inits(measured, k0, k1, n_init=n_init, lam=lam, mu=mu, eps=eps)
 
-    print("CHECK RANK:")
-    print(check_rank(X))
-    print("CHECK SPARSITY:")
-    print(check_sparsity(Y))
+    # print("CHECK RANK:")
+    # print(check_rank(X))
+    # print("CHECK SPARSITY:")
+    # print(check_sparsity(Y))
 
     # fig, axes = plt.subplots(2,3)
     # axes[0][0].imshow(distance_matrix)
@@ -128,55 +128,85 @@ if __name__=="__main__":
     n_neighbors = 10
     print("n_neighbors:",n_neighbors)
     anchor_locs = true_locs[:num_anchors]
+
     pred_direct_PCA = solve_direct(measured, anchor_locs, mode="Kabsch")
     pred_orig = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, measured, dont_square=False)
+
     denoised = denoise_via_SVD(measured**2,k=4,fill_diag=False,take_sqrt=False)
     pred_denoised = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, denoised, dont_square=True)
-    pred_X = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True)
+    pred_denoised_direct = solve_direct(denoised, anchor_locs, mode="Kabsch")
 
-    pred_orig = torch.Tensor(pred_orig)
-    pred_denoised = torch.Tensor(pred_denoised)
-    pred_X = torch.Tensor(pred_X)
+    pred_X = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True)
+    pred_X_direct = solve_direct(X, anchor_locs, mode="Kabsch")
 
     loss_fn = torch.nn.MSELoss()
 
     loss_direct_PCA = loss_fn(pred_direct_PCA[num_anchors:], true_locs[num_anchors:])
     print(f"direct (RMSE):{torch.sqrt(loss_direct_PCA).item()}")
+
     loss_orig = loss_fn(pred_orig[num_anchors:], true_locs[num_anchors:])
     print(f"orig (RMSE):{torch.sqrt(loss_orig).item()}")
+
     loss_denoised = loss_fn(pred_denoised[num_anchors:], true_locs[num_anchors:])
     print(f"denoised (RMSE):{torch.sqrt(loss_denoised).item()}")
+
+    loss_denoised_direct = loss_fn(pred_denoised_direct[num_anchors:], true_locs[num_anchors:])
+    print(f"denoised direct (RMSE):{torch.sqrt(loss_denoised_direct).item()}")
+
     loss_X = loss_fn(pred_X[num_anchors:], true_locs[num_anchors:])
     print(f"X (RMSE):{torch.sqrt(loss_X).item()}")
 
-    fig2, axes2 = plt.subplots(1,4)
+    loss_X_direct = loss_fn(pred_X_direct[num_anchors:], true_locs[num_anchors:])
+    print(f"X direct (RMSE):{torch.sqrt(loss_X_direct).item()}")
 
-    axes2[0].scatter(pred_direct_PCA[:num_anchors,0].detach().numpy(), pred_direct_PCA[:num_anchors,1].detach().numpy(), label="predicted a", marker="+",color="blue")#,alpha=0.1)
-    axes2[0].scatter(true_locs[:num_anchors,0].detach().numpy(), true_locs[:num_anchors,1].detach().numpy(), label="actual a", marker="x",color="orange")#,alpha=0.1)
-    axes2[0].scatter(pred_direct_PCA[num_anchors:,0].detach().numpy(), pred_direct_PCA[num_anchors:,1].detach().numpy(), label="predicted",color="blue")#,alpha=0.1)
-    axes2[0].scatter(true_locs[num_anchors:,0].detach().numpy(), true_locs[num_anchors:,1].detach().numpy(), label="actual",color="orange")#,alpha=0.1)
-    axes2[0].legend()
-    axes2[0].set_title(f"solve directly (PCA) D=X+Y")
+    fig2, axes2 = plt.subplots(2,3)
 
-    axes2[1].scatter(pred_orig[:num_anchors,0].detach().numpy(), pred_orig[:num_anchors,1].detach().numpy(), label="predicted a", marker="+",color="blue")#,alpha=0.1)
-    axes2[1].scatter(true_locs[:num_anchors,0].detach().numpy(), true_locs[:num_anchors,1].detach().numpy(), label="actual a", marker="x",color="orange")#,alpha=0.1)
-    axes2[1].scatter(pred_orig[num_anchors:,0].detach().numpy(), pred_orig[num_anchors:,1].detach().numpy(), label="predicted",color="blue")#,alpha=0.1)
-    axes2[1].scatter(true_locs[num_anchors:,0].detach().numpy(), true_locs[num_anchors:,1].detach().numpy(), label="actual",color="orange")#,alpha=0.1)
-    axes2[1].legend()
-    axes2[1].set_title(f"solve LLE with original D=X+Y")
+    ax = axes2[0][0]
+    ax.scatter(pred_direct_PCA[:num_anchors,0].detach().numpy(), pred_direct_PCA[:num_anchors,1].detach().numpy(), label="predicted a", marker="+",color="blue")#,alpha=0.1)
+    ax.scatter(true_locs[:num_anchors,0].detach().numpy(), true_locs[:num_anchors,1].detach().numpy(), label="actual a", marker="x",color="orange")#,alpha=0.1)
+    ax.scatter(pred_direct_PCA[num_anchors:,0].detach().numpy(), pred_direct_PCA[num_anchors:,1].detach().numpy(), label="predicted",color="blue")#,alpha=0.1)
+    ax.scatter(true_locs[num_anchors:,0].detach().numpy(), true_locs[num_anchors:,1].detach().numpy(), label="actual",color="orange")#,alpha=0.1)
+    ax.legend()
+    ax.set_title(f"solve directly (Kabsch) D")
 
-    axes2[2].scatter(pred_denoised[:num_anchors,0].detach().numpy(), pred_denoised[:num_anchors,1].detach().numpy(), label="predicted a", marker="+",color="blue")#,alpha=0.1)
-    axes2[2].scatter(true_locs[:num_anchors,0].detach().numpy(), true_locs[:num_anchors,1].detach().numpy(), label="actual a", marker="x",color="orange")#,alpha=0.1)
-    axes2[2].scatter(pred_denoised[num_anchors:,0].detach().numpy(), pred_denoised[num_anchors:,1].detach().numpy(), label="predicted",color="blue")#,alpha=0.1)
-    axes2[2].scatter(true_locs[num_anchors:,0].detach().numpy(), true_locs[num_anchors:,1].detach().numpy(), label="actual",color="orange")#,alpha=0.1)
-    axes2[2].legend()
-    axes2[2].set_title(f"solve LLE with rank_reduce(D)")
+    ax = axes2[1][0]
+    ax.scatter(pred_orig[:num_anchors,0].detach().numpy(), pred_orig[:num_anchors,1].detach().numpy(), label="predicted a", marker="+",color="blue")#,alpha=0.1)
+    ax.scatter(true_locs[:num_anchors,0].detach().numpy(), true_locs[:num_anchors,1].detach().numpy(), label="actual a", marker="x",color="orange")#,alpha=0.1)
+    ax.scatter(pred_orig[num_anchors:,0].detach().numpy(), pred_orig[num_anchors:,1].detach().numpy(), label="predicted",color="blue")#,alpha=0.1)
+    ax.scatter(true_locs[num_anchors:,0].detach().numpy(), true_locs[num_anchors:,1].detach().numpy(), label="actual",color="orange")#,alpha=0.1)
+    ax.legend()
+    ax.set_title(f"solve LLE D")
 
-    axes2[3].scatter(pred_X[:num_anchors,0].detach().numpy(), pred_X[:num_anchors,1].detach().numpy(), label="predicted a", marker="+",color="blue")#,alpha=0.1)
-    axes2[3].scatter(true_locs[:num_anchors,0].detach().numpy(), true_locs[:num_anchors,1].detach().numpy(), label="actual a", marker="x",color="orange")#,alpha=0.1)
-    axes2[3].scatter(pred_X[num_anchors:,0].detach().numpy(), pred_X[num_anchors:,1].detach().numpy(), label="predicted",color="blue")#,alpha=0.1)
-    axes2[3].scatter(true_locs[num_anchors:,0].detach().numpy(), true_locs[num_anchors:,1].detach().numpy(), label="actual",color="orange")#,alpha=0.1)
-    axes2[3].legend()
-    axes2[3].set_title(f"solve LLE with X")
+    ax = axes2[1][1]
+    ax.scatter(pred_denoised[:num_anchors,0].detach().numpy(), pred_denoised[:num_anchors,1].detach().numpy(), label="predicted a", marker="+",color="blue")#,alpha=0.1)
+    ax.scatter(true_locs[:num_anchors,0].detach().numpy(), true_locs[:num_anchors,1].detach().numpy(), label="actual a", marker="x",color="orange")#,alpha=0.1)
+    ax.scatter(pred_denoised[num_anchors:,0].detach().numpy(), pred_denoised[num_anchors:,1].detach().numpy(), label="predicted",color="blue")#,alpha=0.1)
+    ax.scatter(true_locs[num_anchors:,0].detach().numpy(), true_locs[num_anchors:,1].detach().numpy(), label="actual",color="orange")#,alpha=0.1)
+    ax.legend()
+    ax.set_title(f"solve LLE rank_reduce(D)")
+
+    ax = axes2[0][1]
+    ax.scatter(pred_denoised_direct[:num_anchors,0].detach().numpy(), pred_denoised_direct[:num_anchors,1].detach().numpy(), label="predicted a", marker="+",color="blue")#,alpha=0.1)
+    ax.scatter(true_locs[:num_anchors,0].detach().numpy(), true_locs[:num_anchors,1].detach().numpy(), label="actual a", marker="x",color="orange")#,alpha=0.1)
+    ax.scatter(pred_denoised_direct[num_anchors:,0].detach().numpy(), pred_denoised_direct[num_anchors:,1].detach().numpy(), label="predicted",color="blue")#,alpha=0.1)
+    ax.scatter(true_locs[num_anchors:,0].detach().numpy(), true_locs[num_anchors:,1].detach().numpy(), label="actual",color="orange")#,alpha=0.1)
+    ax.legend()
+    ax.set_title(f"solve directly (Kabsch) rank_reduce(D)")
+
+    ax = axes2[1][2]
+    ax.scatter(pred_X[:num_anchors,0].detach().numpy(), pred_X[:num_anchors,1].detach().numpy(), label="predicted a", marker="+",color="blue")#,alpha=0.1)
+    ax.scatter(true_locs[:num_anchors,0].detach().numpy(), true_locs[:num_anchors,1].detach().numpy(), label="actual a", marker="x",color="orange")#,alpha=0.1)
+    ax.scatter(pred_X[num_anchors:,0].detach().numpy(), pred_X[num_anchors:,1].detach().numpy(), label="predicted",color="blue")#,alpha=0.1)
+    ax.scatter(true_locs[num_anchors:,0].detach().numpy(), true_locs[num_anchors:,1].detach().numpy(), label="actual",color="orange")#,alpha=0.1)
+    ax.legend()
+    ax.set_title(f"solve LLE with X")
+
+    ax = axes2[0][2]
+    ax.scatter(pred_X_direct[:num_anchors,0].detach().numpy(), pred_X_direct[:num_anchors,1].detach().numpy(), label="predicted a", marker="+",color="blue")#,alpha=0.1)
+    ax.scatter(true_locs[:num_anchors,0].detach().numpy(), true_locs[:num_anchors,1].detach().numpy(), label="actual a", marker="x",color="orange")#,alpha=0.1)
+    ax.scatter(pred_X_direct[num_anchors:,0].detach().numpy(), pred_X_direct[num_anchors:,1].detach().numpy(), label="predicted",color="blue")#,alpha=0.1)
+    ax.scatter(true_locs[num_anchors:,0].detach().numpy(), true_locs[num_anchors:,1].detach().numpy(), label="actual",color="orange")#,alpha=0.1)
+    ax.legend()
+    ax.set_title(f"solve directly (Kabsch) X")
 
     plt.show()

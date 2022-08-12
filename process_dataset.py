@@ -139,10 +139,10 @@ def separable_dataset(num_nodes, num_anchors):
     k0 = 4
     distance_matrix = torch.Tensor(matrix_from_locs(true_locs))
     # noise = torch.randn((num_nodes,num_nodes))*(0.04**0.5)
-    noise = torch.randn((num_nodes,num_nodes))*(0.0**0.5)
-    print("zero-mean noise variance is ",0.0)
+    noise = torch.randn((num_nodes,num_nodes))*(0.04**0.5)
+    print("zero-mean noise variance is ",0.04)
     noise.fill_diagonal_(0)
-    p_nLOS = 0/10
+    p_nLOS = 1/10
     print("prob of nLOS is",p_nLOS)
     nLOS = np.random.choice([0, 1], size=(num_nodes,num_nodes), p=[1-p_nLOS, p_nLOS])
     nLOS = torch.Tensor(nLOS)

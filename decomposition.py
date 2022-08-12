@@ -63,10 +63,9 @@ def solve_direct(noisy_distance_matrix, anchor_locs, mode="None"):
             M[i][j] = (x[0][j]**2 + x[i][0]**2 - x[i][j]**2)/2
     q, v = np.linalg.eig(M)
     locs = np.zeros((num_nodes,2))
-    print(q[0],q[1])
+    q = q.real
     locs[:,0] = np.sqrt(q[0])*v[:,0]
     locs[:,1] = np.sqrt(q[1])*v[:,1]
-    print("locs[0]",locs[0])
 
     if mode == "None":
         pass
@@ -77,10 +76,7 @@ def solve_direct(noisy_distance_matrix, anchor_locs, mode="None"):
         n, m = A.shape
         EA = np.mean(A, axis=0)
         EB = np.mean(B, axis=0)
-        print("EA:",EA)
-        print("EB:",EB)
         VarA = np.mean(np.linalg.norm(A - EA, axis=1) ** 2)
-        print("VarA:",VarA)
         H = ((A - EA).T @ (B - EB)) / n
         U, D, VT = np.linalg.svd(H)
 
@@ -100,14 +96,7 @@ def solve_direct(noisy_distance_matrix, anchor_locs, mode="None"):
             S, c = S_neg, c_neg
 
         R = U @ S @ VT
-        print("D:",D)
-        print("S:",S)
-        print("np.trace(np.diag(D) @ S):", np.trace(np.diag(D) @ S))
         t = EA - c * R @ EB
-        print("***")
-        print("rotation, scale, translation")
-        print(R, c, t)
-        print("***")
         locs = np.array([t + c * R @ b for b in locs])
 
     return torch.Tensor(locs)

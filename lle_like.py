@@ -121,7 +121,7 @@ def solve_like_LLE(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_
     indices = neighbors(noisy_distance_matrix, n_neighbors)
     start = time.time()
     res = barycenter_weights(noisy_distance_matrix, indices, reg=1e-3,dont_square=dont_square)
-    print(f"{time.time()-start} to find weight mat")
+    # print(f"{time.time()-start} to find weight mat")
     mat = weight_to_mat(res, indices)
     I_minus_W = np.eye(num_nodes)-mat
     RHS = I_minus_W[:,:num_anchors]
@@ -129,10 +129,85 @@ def solve_like_LLE(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_
     LHS = -1*I_minus_W[:,num_anchors:]
     start = time.time()
     node_locs, res, rnk, s = lstsq(LHS, RHS)
-    print("RES:",res)
-    print(f"{time.time()-start} to find locs")
+    # print("RES:",res)
+    # print(f"{time.time()-start} to find locs")
     pred = np.vstack((anchor_locs,node_locs))
-    return pred
+    return torch.Tensor(pred)
+
+def solve_iteratively(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_matrix,dont_square=False):
+    indices = neighbors(noisy_distance_matrix, n_neighbors)
+    # start = time.time()
+    res = barycenter_weights(noisy_distance_matrix, indices, reg=1e-3,dont_square=dont_square)
+    # print(f"{time.time()-start} to find weight mat")
+    mat = weight_to_mat(res, indices)
+
+    final_locs = np.zeros((num_nodes,2))
+    final_locs[:num_anchors] = anchor_locs
+    known = np.zeros(num_nodes, dtype=bool)
+    known[:num_anchors] = True
+
+    known_before = np.sum(known)
+    learned_something = True
+    K = n_neighbors
+
+    while K >= 0:
+
+        while learned_something:
+
+            W_known = mat[:,known]
+            W_unknown = mat[:,np.logical_not(known)]
+            counts = np.count_nonzero(W_known, axis=1)
+            solve_these = counts>=K
+            solve_these[known] = False
+            if np.sum(solve_these)==0:
+                break
+            print("considering",np.sum(solve_these),"rows...")
+
+            if K == n_neighbors:
+                final_locs[solve_these] = W_known[solve_these].dot(final_locs[known])
+
+            else:
+                LHS = (mat-np.eye(num_nodes))[:,solve_these]
+                RHS = (np.eye(num_nodes)-mat)[:,known].dot(final_locs[known])
+                final_locs[solve_these], _, _, _ = lstsq(LHS,RHS)
+
+            known[solve_these] = True
+            known_after = np.sum(known)
+            if known_after == num_nodes:
+                print("done!!!!")
+                return torch.Tensor(final_locs)
+            if known_after == known_before:
+                learned_something = False
+            known_before = known_after
+
+        print("stopped learning with K=",K)
+        K -= 1
+        learned_something = True
+
+    print("uh oh, couldn't solve everything?")
+    return torch.Tensor(final_locs)
+
+
+
+    for row in W_known:
+        if np.count_nonzero(row) == n_neighbors:
+            print("this node's neighbors are all anchors!")
+            print(row)
+            loc = row.dot(anchor_locs)
+            print("this node's loc is:")
+            print(loc)
+            return
+
+    I_minus_W = np.eye(num_nodes)-mat
+    RHS = I_minus_W[:,:num_anchors]
+    RHS = RHS.dot(anchor_locs)
+    LHS = -1*I_minus_W[:,num_anchors:]
+    start = time.time()
+    node_locs, res, rnk, s = lstsq(LHS, RHS)
+    # print("RES:",res)
+    # print(f"{time.time()-start} to find locs")
+    pred = np.vstack((anchor_locs,node_locs))
+    return torch.Tensor(pred)
 
 def test_this():
     np.random.seed(1)
