@@ -51,19 +51,22 @@ def solve_rank_problem(D, Y, lam, k0):
 
 def separate_dataset(measured, k0, k1, lam=0.1, mu=0.1, eps=0.001, X=None, Y=None):
     D = measured**2
+    if check_rank(D) == k0:
+        print("already low rank")
+        return D, torch.zeros_like(D), 0
     if X is None:
         X = torch.zeros_like(D)
     if Y is None:
         Y = torch.zeros_like(D)
     fi = f(D, X, Y, lam, mu)
+    print("fi:",fi)
     # fig, axes = plt.subplots(10,3)
-    for iter in range(10):
+    for iter in range(100):
         Y = solve_sparse_problem(D, X, mu, k1)
         X = solve_rank_problem(D, Y, lam, k0)
         ff = f(D, X, Y, lam, mu)
-        # if ff <= 0:
-        #     return X, Y
         if (fi-ff)/ff <= eps:
+            print(iter,"ff:",ff)
             return X, Y, ff
         fi = ff
         # axes[iter][0].imshow(D)
@@ -75,9 +78,8 @@ def separate_dataset(measured, k0, k1, lam=0.1, mu=0.1, eps=0.001, X=None, Y=Non
 def separate_dataset_multiple_inits(measured, k0, k1, n_init=10, lam=0.1, mu=0.1, eps=0.001):
     best_X, best_Y, best_ff = separate_dataset(measured, k0, k1, lam, mu, eps)
     for init in range(1,n_init):
-        init_X = reduce_rank(torch.rand(measured.shape)*10)
+        init_X = reduce_rank(torch.rand(measured.shape)*torch.max(measured))
         X, Y, ff = separate_dataset(measured, k0, k1, lam, mu, eps, X=init_X)
-        # print(ff)
         if ff < best_ff:
             best_X, best_Y, best_ff = X, Y, ff
     return best_X, best_Y, best_ff

@@ -82,6 +82,7 @@ def barycenter_weights(distance_matrix, indices, reg=1e-5, dont_square=False):
     B = np.empty((n_samples, n_neighbors))
     v = np.ones(n_neighbors)
     D = distance_matrix.numpy()
+    perfect = True
     for i, ind in enumerate(indices):
         C = np.empty((n_neighbors, n_neighbors))
         for j in range(n_neighbors):
@@ -100,8 +101,13 @@ def barycenter_weights(distance_matrix, indices, reg=1e-5, dont_square=False):
             w = solve(C, v, assume_a='pos')
         except np.linalg.LinAlgError:
             # print('in barycenter_weights, matrix C is singular -> use least squares')
+            perfect = False
             w, res, rnk, s = lstsq(C, v)
         B[i, :] = w / np.sum(w)
+    if perfect:
+        print("able to recover weights exactly")
+    else:
+        print("using least squares to recover weights")
     return B
 
 def weight_to_mat(weights, indices):
@@ -114,6 +120,25 @@ def weight_to_mat(weights, indices):
 def neighbors(distance_matrix, n_neighbors):
     indices = np.argsort(distance_matrix.numpy(), axis=1)
     return indices[:,1:n_neighbors+1]
+
+def solve_like_LLE_anchors(num_nodes,num_anchors,anchor_locs,noisy_distance_matrix,dont_square=False):
+    # np.random.seed(1)
+    # torch.manual_seed(1)
+    indices = np.vstack([np.linspace(0,num_anchors-1,num_anchors,dtype=int)]*num_nodes)
+    start = time.time()
+    res = barycenter_weights(noisy_distance_matrix, indices, reg=1e-3,dont_square=dont_square)
+    # print(f"{time.time()-start} to find weight mat")
+    mat = weight_to_mat(res, indices)
+    I_minus_W = np.eye(num_nodes)-mat
+    RHS = I_minus_W[:,:num_anchors]
+    RHS = RHS.dot(anchor_locs)
+    LHS = -1*I_minus_W[:,num_anchors:]
+    start = time.time()
+    node_locs, res, rnk, s = lstsq(LHS, RHS)
+    # print("RES:",res)
+    # print(f"{time.time()-start} to find locs")
+    pred = np.vstack((anchor_locs,node_locs))
+    return torch.Tensor(pred)
 
 def solve_like_LLE(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_matrix,dont_square=False):
     # np.random.seed(1)

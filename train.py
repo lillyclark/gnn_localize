@@ -1,7 +1,8 @@
 from process_dataset import *
 from models import *
-from lle_like import solve_like_LLE, neighbors, barycenter_weights, weight_to_mat, solve_with_LRR
+from lle_like import solve_like_LLE, solve_like_LLE_anchors, neighbors, barycenter_weights, weight_to_mat, solve_with_LRR
 from decomposition import normalize_tensor, reduce_rank, denoise_via_SVD
+from separate import *
 import torch.optim as optim
 import torch
 import wandb
@@ -16,10 +17,10 @@ import numpy as np
 np.random.seed(0)
 torch.manual_seed(0)
 
-num_nodes = 100
-num_anchors = 20
+num_nodes = 500
+num_anchors = 50
 threshold = 1.2
-n_neighbors = 4
+n_neighbors = 25
 
 start = time.time()
 data_loader, num_nodes, noisy_distance_matrix = their_dataset(num_nodes, num_anchors, threshold=threshold)
@@ -32,7 +33,8 @@ data_loader, num_nodes, noisy_distance_matrix = their_dataset(num_nodes, num_anc
 # modelname = "GCN"
 # modelname = "GAT"
 # modelname = "LLE"
-modelname = "LRR"
+# modelname = "LRR"
+modelname = "novel"
 
 print("loaded dataset, using model",modelname)
 print(f"{time.time()-start} seconds")
@@ -41,7 +43,57 @@ print(f"{time.time()-start} seconds")
 loss_fn = torch.nn.MSELoss()
 # loss_fn = torch.nn.L1Loss()
 
-if modelname == "LRR":
+if modelname == "novel":
+    anchors_as_neighbors = False
+    assert n_neighbors > 3
+    print("low rank plus sparse decomp, then lle-like solve")
+    print("n_neighbors =",n_neighbors)
+    for batch in data_loader:
+        lam = 1/(num_nodes**0.5)*1.1
+        mu = 1/(num_nodes**0.5)*1.1
+        eps = 0.001
+        n_init = 10
+        print("lam:",lam)
+        print("mu:",mu)
+        print("eps:",eps)
+        print("n_init:",n_init)
+
+        k1_try = [25000] #[20000, 21000, 22000, 23000, 24000, 25000, 26000, 27000, 28000, 29000, 30000]
+        print("try k1:",k1_try)
+
+        start = time.time()
+        anchor_locs = batch.y[batch.anchors]
+
+        # k1s = []
+        # ffs = []
+
+        noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
+        best_X, best_Y, best_ff = separate_dataset_multiple_inits(noisy_distance_matrix, k0=4, k1=k1_try[0], n_init=n_init, lam=lam, mu=mu, eps=eps)
+        # k1s.append(k1_try[0])
+        # ffs.append(best_ff)
+        for k1 in k1_try[1:]:
+            X, Y, ff = separate_dataset_multiple_inits(noisy_distance_matrix, k0=4, k1=k1, n_init=n_init, lam=lam, mu=mu, eps=eps)
+            # k1s.append(k1)
+            # ffs.append(ff)
+            if ff < best_ff:
+                print("k1=",k1)
+                best_X, best_Y, best_ff = X, Y, ff
+        X, Y, ff = best_X, best_Y, best_ff
+        # fig, ax = plt.subplots(1,1)
+        # ax.plot(k1s, ffs)
+        # ax.set_xlabel("Value of k1 (sparsity)")
+        # ax.set_ylabel("Value of f (cost function)")
+        # plt.show()
+
+        if anchors_as_neighbors:
+            pred = solve_like_LLE_anchors(num_nodes, num_anchors, anchor_locs, X, dont_square=True)
+        else:
+            pred = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True)
+        print(f"{time.time()-start} seconds to solve")
+    loss_test = loss_fn(pred[batch.nodes], batch.y[batch.nodes])
+    print(f"test (RMSE):{torch.sqrt(loss_test).item()}")
+
+elif modelname == "LRR":
     assert n_neighbors > 3
     print("local rank reduction")
     print("n_neighbors =",n_neighbors)
@@ -59,7 +111,7 @@ elif modelname == "LLE":
     print("n_neighbors =",n_neighbors)
     for batch in data_loader:
         anchor_locs = batch.y[batch.anchors]
-        reduce_rank = True
+        reduce_rank = False
         if reduce_rank:
             euclidean_matrix = noisy_distance_matrix**2
             start = time.time()
@@ -78,6 +130,7 @@ elif modelname == "LLE":
     print(f"test (RMSE):{torch.sqrt(loss_test).item()}")
 
 else:
+    assert threshold < 5
     if modelname == "gfNN":
         model = gfNN(nfeat=num_nodes, nhid=1000, nout=2, dropout=0.5)
     elif modelname == "GCN":

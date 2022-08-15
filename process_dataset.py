@@ -164,9 +164,18 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0):
         for j in range(num_nodes):
             d = pdist(true_locs[i].unsqueeze(0), true_locs[j].unsqueeze(0))
             distance_matrix[i][j] = d
-    noise = torch.randn((num_nodes,num_nodes))*(0.5**0.5)
+    noise = torch.randn((num_nodes,num_nodes))*(0.04**0.5)
     noise.fill_diagonal_(0)
-    noisy_distance_matrix = distance_matrix + noise
+
+    p_nLOS = 1/10
+    print("prob of nLOS is",p_nLOS)
+    nLOS = np.random.choice([0, 1], size=(num_nodes,num_nodes), p=[1-p_nLOS, p_nLOS])
+    nLOS = torch.Tensor(nLOS)
+    nLOS.fill_diagonal_(0)
+    print("nLOS noise is U[0,10]")
+    nLOS_noise = torch.rand((num_nodes,num_nodes))*10
+
+    noisy_distance_matrix = distance_matrix + noise + (nLOS*nLOS_noise)
 
     adjacency_matrix = (noisy_distance_matrix<threshold).float()
     thresholded_noisy_distance_matrix  = noisy_distance_matrix.clone()
