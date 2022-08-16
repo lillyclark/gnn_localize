@@ -19,12 +19,12 @@ torch.manual_seed(0)
 
 num_nodes = 500
 num_anchors = 50
-threshold = 1.2
+threshold = 4
 n_neighbors = 25
 
 start = time.time()
-data_loader, num_nodes, noisy_distance_matrix = their_dataset(num_nodes, num_anchors, threshold=threshold)
-# data_loader, num_nodes, noisy_distance_matrix = fake_dataset(num_nodes, num_anchors, threshold=threshold)
+# data_loader, num_nodes, noisy_distance_matrix = their_dataset(num_nodes, num_anchors, threshold=threshold)
+data_loader, num_nodes, noisy_distance_matrix = fake_dataset(num_nodes, num_anchors, threshold=threshold)
 # data_loader, num_nodes, noisy_distance_matrix = nLOS_dataset(num_nodes, num_anchors, threshold=threshold)
 # data_loader, num_nodes = scoped_dataset(num_nodes, num_anchors, threshold=threshold)
 # data_loader, num_nodes, noisy_distance_matrix = modified_adj(num_nodes, num_anchors, threshold=threshold)
@@ -52,29 +52,30 @@ if modelname == "novel":
         lam = 1/(num_nodes**0.5)*1.1
         mu = 1/(num_nodes**0.5)*1.1
         eps = 0.001
-        n_init = 10
+        n_init = 1
         print("lam:",lam)
         print("mu:",mu)
         print("eps:",eps)
         print("n_init:",n_init)
 
-        k1_try = [25000] #[20000, 21000, 22000, 23000, 24000, 25000, 26000, 27000, 28000, 29000, 30000]
+        k1_try = [8500,40565,58000]
+        # k1_try = [25000] #[20000, 21000, 22000, 23000, 24000, 25000, 26000, 27000, 28000, 29000, 30000]
         print("try k1:",k1_try)
 
         start = time.time()
         anchor_locs = batch.y[batch.anchors]
 
-        # k1s = []
-        # ffs = []
+        k1s = []
+        ffs = []
 
         noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
         best_X, best_Y, best_ff = separate_dataset_multiple_inits(noisy_distance_matrix, k0=4, k1=k1_try[0], n_init=n_init, lam=lam, mu=mu, eps=eps)
-        # k1s.append(k1_try[0])
-        # ffs.append(best_ff)
+        k1s.append(k1_try[0])
+        ffs.append(best_ff)
         for k1 in k1_try[1:]:
             X, Y, ff = separate_dataset_multiple_inits(noisy_distance_matrix, k0=4, k1=k1, n_init=n_init, lam=lam, mu=mu, eps=eps)
-            # k1s.append(k1)
-            # ffs.append(ff)
+            k1s.append(k1)
+            ffs.append(ff)
             if ff < best_ff:
                 print("k1=",k1)
                 best_X, best_Y, best_ff = X, Y, ff
@@ -130,7 +131,6 @@ elif modelname == "LLE":
     print(f"test (RMSE):{torch.sqrt(loss_test).item()}")
 
 else:
-    assert threshold < 5
     if modelname == "gfNN":
         model = gfNN(nfeat=num_nodes, nhid=1000, nout=2, dropout=0.5)
     elif modelname == "GCN":
