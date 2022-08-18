@@ -121,29 +121,13 @@ def neighbors(distance_matrix, n_neighbors):
     indices = np.argsort(distance_matrix.numpy(), axis=1)
     return indices[:,1:n_neighbors+1]
 
-def solve_like_LLE_anchors(num_nodes,num_anchors,anchor_locs,noisy_distance_matrix,dont_square=False):
+def solve_like_LLE(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_matrix,dont_square=False,anchors_as_neighbors=False):
     # np.random.seed(1)
     # torch.manual_seed(1)
-    indices = np.vstack([np.linspace(0,num_anchors-1,num_anchors,dtype=int)]*num_nodes)
-    start = time.time()
-    res = barycenter_weights(noisy_distance_matrix, indices, reg=1e-3,dont_square=dont_square)
-    # print(f"{time.time()-start} to find weight mat")
-    mat = weight_to_mat(res, indices)
-    I_minus_W = np.eye(num_nodes)-mat
-    RHS = I_minus_W[:,:num_anchors]
-    RHS = RHS.dot(anchor_locs)
-    LHS = -1*I_minus_W[:,num_anchors:]
-    start = time.time()
-    node_locs, res, rnk, s = lstsq(LHS, RHS)
-    # print("RES:",res)
-    # print(f"{time.time()-start} to find locs")
-    pred = np.vstack((anchor_locs,node_locs))
-    return torch.Tensor(pred)
-
-def solve_like_LLE(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_matrix,dont_square=False):
-    # np.random.seed(1)
-    # torch.manual_seed(1)
-    indices = neighbors(noisy_distance_matrix, n_neighbors)
+    if anchors_as_neighbors:
+        indices = np.vstack([np.linspace(0,n_neighbors-1,n_neighbors,dtype=int)]*num_nodes)
+    else:
+        indices = neighbors(noisy_distance_matrix, n_neighbors)
     start = time.time()
     res = barycenter_weights(noisy_distance_matrix, indices, reg=1e-3,dont_square=dont_square)
     # print(f"{time.time()-start} to find weight mat")
