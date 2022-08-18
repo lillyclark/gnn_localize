@@ -59,7 +59,7 @@ def separate_dataset(measured, k0, k1, lam=0.1, mu=0.1, eps=0.001, X=None, Y=Non
     if Y is None:
         Y = torch.zeros_like(D)
     fi = f(D, X, Y, lam, mu)
-    print("fi:",fi)
+    # print("fi:",fi)
     # fig, axes = plt.subplots(10,3)
     for iter in range(100):
         Y = solve_sparse_problem(D, X, mu, k1)
@@ -83,6 +83,33 @@ def separate_dataset_multiple_inits(measured, k0, k1, n_init=10, lam=0.1, mu=0.1
         if ff < best_ff:
             best_X, best_Y, best_ff = X, Y, ff
     return best_X, best_Y, best_ff
+
+def separate_dataset_find_k1(measured, k0, k1_init=0, step_size=1, n_init=1, lam=0.1, mu=0.1, eps=0.001, plot=False):
+    """ step_size in percentage of edges """
+    num_edges = int(measured.shape[0]*measured.shape[1])
+    step_size_per = step_size/100
+    step_size = int(num_edges*step_size/100)
+    k1 = k1_init
+
+    print("k1:",k1)
+    X, Y, ff = separate_dataset_multiple_inits(measured, k0, k1, n_init=n_init, lam=lam, mu=mu, eps=eps)
+    if ff == 0:
+        return X, Y, ff
+
+    while True:
+        k1 += step_size
+        if k1 > num_edges*(7/10):
+            print("Estimated sparsity exceeded 70%")
+            return X, Y, ff
+        print("k1:",k1)
+        X_, Y_, ff_ = separate_dataset_multiple_inits(measured, k0, int(k1), n_init=n_init, lam=lam, mu=mu, eps=eps)
+        delta = (ff - ff_)/ff
+        print("delta:",delta)
+        if delta < step_size_per:
+            print("***converged***")
+            print("best guess is k1:", k1)
+            return X_, Y_, ff_
+        ff = ff_
 
 if __name__=="__main__":
 

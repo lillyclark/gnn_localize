@@ -62,6 +62,17 @@ if modelname == "novel":
         anchor_locs = batch.y[batch.anchors]
         noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
 
+        # give a lower bound on k1
+        k1_init = num_nodes**2*(5/100)
+        X, Y, ff = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=1, n_init=1, lam=0.1, mu=0.1, eps=0.001, plot=False)
+
+        pred = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True,anchors_as_neighbors=anchors_as_neighbors)
+        loss_test = loss_fn(pred[batch.nodes], batch.y[batch.nodes])
+        print(f"test (RMSE):{torch.sqrt(loss_test).item()}")
+        print(f"{time.time()-start} seconds to solve")
+        break
+
+        print("SKIP THIS, IT'S JUST FOR PLOTTING AGAINST K1")
         # k1s = np.linspace(0,noisy_distance_matrix.shape[0]**2,101)
         k1s = np.linspace(10000,40000,21)
 
@@ -94,7 +105,6 @@ if modelname == "novel":
         ax[1].set_title("RMSE")
         plt.suptitle("Performance of alternating min for different guesses of k1 (sparsity)")
         plt.show()
-        print(f"{time.time()-start} seconds to solve")
 
 elif modelname == "LRR":
     assert n_neighbors > 3
