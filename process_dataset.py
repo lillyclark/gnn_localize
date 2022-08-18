@@ -84,6 +84,8 @@ def modified_adj(num_nodes, num_anchors, threshold=1.0):
     return DataLoader([data]), num_nodes, noisy_distance_matrix
 
 def their_dataset(num_nodes, num_anchor, threshold=1.0):
+    if threshold is None:
+        threshold = 10000
     # m = loadmat("./GNN-For-localization/Networks/8anchor_1000agent_0PercentNLOS_smallLOS.mat")
     m = loadmat("./GNN-For-localization/Networks/8anchor_1000agent_10PercentNLOS_mediumLOS.mat")
     Range_Mat = m["Range_Mat"][:num_nodes,:num_nodes]

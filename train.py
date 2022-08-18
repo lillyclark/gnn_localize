@@ -19,22 +19,22 @@ torch.manual_seed(0)
 
 num_nodes = 500
 num_anchors = 50
-threshold = None #1.2
+threshold = 1.2
 n_neighbors = 25
 
 start = time.time()
-# data_loader, num_nodes, noisy_distance_matrix = their_dataset(num_nodes, num_anchors, threshold=threshold)
-data_loader, num_nodes, noisy_distance_matrix = fake_dataset(num_nodes, num_anchors, threshold=threshold)
+data_loader, num_nodes, noisy_distance_matrix = their_dataset(num_nodes, num_anchors, threshold=threshold)
+# data_loader, num_nodes, noisy_distance_matrix = fake_dataset(num_nodes, num_anchors, threshold=threshold)
 # data_loader, num_nodes, noisy_distance_matrix = nLOS_dataset(num_nodes, num_anchors, threshold=threshold)
 # data_loader, num_nodes = scoped_dataset(num_nodes, num_anchors, threshold=threshold)
 # data_loader, num_nodes, noisy_distance_matrix = modified_adj(num_nodes, num_anchors, threshold=threshold)
 
 
-# modelname = "GCN"
+modelname = "GCN"
 # modelname = "GAT"
 # modelname = "LLE"
 # modelname = "LRR"
-modelname = "novel"
+# modelname = "novel"
 
 print("loaded dataset, using model",modelname)
 print(f"{time.time()-start} seconds")
