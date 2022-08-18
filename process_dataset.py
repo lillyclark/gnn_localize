@@ -164,7 +164,7 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0):
         for j in range(num_nodes):
             d = pdist(true_locs[i].unsqueeze(0), true_locs[j].unsqueeze(0))
             distance_matrix[i][j] = d
-    noise = torch.randn((num_nodes,num_nodes))*(0.04**0.5)
+    noise = torch.randn((num_nodes,num_nodes))*(0.00**0.5)
     noise.fill_diagonal_(0)
 
     p_nLOS = 1/10
@@ -174,19 +174,29 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0):
     nLOS.fill_diagonal_(0)
     print("nLOS noise is U[0,10]")
     nLOS_noise = torch.rand((num_nodes,num_nodes))*10
+    print("how many nLOS measurements?")
+    print(np.count_nonzero(nLOS.numpy()))
 
     noisy_distance_matrix = distance_matrix + noise + (nLOS*nLOS_noise)
 
-    # turn distances above a threshold into noise floor distances
-    noise_floor_distance_matrix  = noisy_distance_matrix.clone()
-    print("how many distance measurements are above the threshold?")
-    c = torch.sum(noise_floor_distance_matrix>threshold).item()
-    print(c,"ie", c/(num_nodes**2), "%")
-    noise_floor_distance_matrix[noise_floor_distance_matrix>threshold] = 2*threshold
+    if threshold is not None:
+        # turn distances above a threshold into noise floor distances
+        noise_floor_distance_matrix  = noisy_distance_matrix.clone()
+        print("how many distance measurements are above the threshold?")
+        c = torch.sum(noise_floor_distance_matrix>threshold).item()
+        print(c,"ie", c/(num_nodes**2)*100, "%")
+        # plt.axvline(c,color="black",label="true missing")
+        noise_floor_distance_matrix[noise_floor_distance_matrix>threshold] = np.ceil(5*2**0.5)
 
-    adjacency_matrix = (noisy_distance_matrix<threshold).float()
-    thresholded_noisy_distance_matrix  = noisy_distance_matrix.clone()
-    thresholded_noisy_distance_matrix[thresholded_noisy_distance_matrix>threshold] = 0.0
+        adjacency_matrix = (noisy_distance_matrix<threshold).float()
+        thresholded_noisy_distance_matrix  = noisy_distance_matrix.clone()
+        thresholded_noisy_distance_matrix[thresholded_noisy_distance_matrix>threshold] = 0.0
+
+    else:
+        noise_floor_distance_matrix = noisy_distance_matrix
+        adjacency_matrix = torch.ones_like(noisy_distance_matrix).float()
+        thresholded_noisy_distance_matrix  = noisy_distance_matrix
+
     features = normalize_tensor(thresholded_noisy_distance_matrix)
     normalized_adjacency_matrix = normalize_tensor(adjacency_matrix)
 
