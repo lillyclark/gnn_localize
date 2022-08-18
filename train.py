@@ -1,6 +1,6 @@
 from process_dataset import *
 from models import *
-from lle_like import solve_like_LLE, solve_like_LLE_anchors, neighbors, barycenter_weights, weight_to_mat, solve_with_LRR
+from lle_like import solve_like_LLE, neighbors, barycenter_weights, weight_to_mat, solve_with_LRR
 from decomposition import normalize_tensor, reduce_rank, denoise_via_SVD
 from separate import *
 import torch.optim as optim
@@ -19,7 +19,7 @@ torch.manual_seed(0)
 
 num_nodes = 500
 num_anchors = 50
-threshold = 4
+threshold = None #1.2
 n_neighbors = 25
 
 start = time.time()
@@ -45,10 +45,11 @@ loss_fn = torch.nn.MSELoss()
 
 if modelname == "novel":
     anchors_as_neighbors = False
-    assert n_neighbors > 3
+    # assert n_neighbors > 3
     print("low rank plus sparse decomp, then lle-like solve")
     print("n_neighbors =",n_neighbors)
     for batch in data_loader:
+        k0 = 4
         lam = 1/(num_nodes**0.5)*1.1
         mu = 1/(num_nodes**0.5)*1.1
         eps = 0.001
@@ -57,42 +58,43 @@ if modelname == "novel":
         print("mu:",mu)
         print("eps:",eps)
         print("n_init:",n_init)
-
-        k1_try = [8500,40565,58000]
-        # k1_try = [25000] #[20000, 21000, 22000, 23000, 24000, 25000, 26000, 27000, 28000, 29000, 30000]
-        print("try k1:",k1_try)
-
         start = time.time()
         anchor_locs = batch.y[batch.anchors]
-
-        k1s = []
-        ffs = []
-
         noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
-        best_X, best_Y, best_ff = separate_dataset_multiple_inits(noisy_distance_matrix, k0=4, k1=k1_try[0], n_init=n_init, lam=lam, mu=mu, eps=eps)
-        k1s.append(k1_try[0])
-        ffs.append(best_ff)
-        for k1 in k1_try[1:]:
-            X, Y, ff = separate_dataset_multiple_inits(noisy_distance_matrix, k0=4, k1=k1, n_init=n_init, lam=lam, mu=mu, eps=eps)
-            k1s.append(k1)
-            ffs.append(ff)
-            if ff < best_ff:
-                print("k1=",k1)
-                best_X, best_Y, best_ff = X, Y, ff
-        X, Y, ff = best_X, best_Y, best_ff
-        # fig, ax = plt.subplots(1,1)
-        # ax.plot(k1s, ffs)
-        # ax.set_xlabel("Value of k1 (sparsity)")
-        # ax.set_ylabel("Value of f (cost function)")
-        # plt.show()
 
-        if anchors_as_neighbors:
-            pred = solve_like_LLE_anchors(num_nodes, num_anchors, anchor_locs, X, dont_square=True)
-        else:
-            pred = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True)
+        # k1s = np.linspace(0,noisy_distance_matrix.shape[0]**2,101)
+        k1s = np.linspace(10000,40000,21)
+
+        ffs = []
+        RMSEs = []
+        for k1 in k1s:
+            print("")
+            print("k1:",k1)
+            X, Y, ff = separate_dataset_multiple_inits(noisy_distance_matrix, k0, int(k1), n_init=n_init, lam=lam, mu=mu, eps=eps)
+            ffs.append(ff)
+            pred = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True,anchors_as_neighbors=anchors_as_neighbors)
+            loss_test = loss_fn(pred[batch.nodes], batch.y[batch.nodes])
+            print(f"test (RMSE):{torch.sqrt(loss_test).item()}")
+            RMSEs.append(torch.sqrt(loss_test).item())
+
+        ffs = np.array(ffs)
+        deltas = ffs[:-1]-ffs[1:]
+        relative_deltas = (ffs[:-1]-ffs[1:])/ffs[1:]
+
+        c = 24977
+        fig, ax = plt.subplots(1,2)
+        ax[0].axvline(c)
+        ax[0].plot(k1s,ffs,label="Cost function")
+        ax[0].set_title("Cost function")
+        # ax[2].axvline(c)
+        # ax[2].plot(k1s[1:],relative_deltas,label="Delta (%)")
+        # ax[2].set_title("Delta")
+        ax[1].axvline(c)
+        ax[1].plot(k1s, RMSEs,label="Final actual error")
+        ax[1].set_title("RMSE")
+        plt.suptitle("Performance of alternating min for different guesses of k1 (sparsity)")
+        plt.show()
         print(f"{time.time()-start} seconds to solve")
-    loss_test = loss_fn(pred[batch.nodes], batch.y[batch.nodes])
-    print(f"test (RMSE):{torch.sqrt(loss_test).item()}")
 
 elif modelname == "LRR":
     assert n_neighbors > 3
@@ -193,6 +195,8 @@ plt.scatter(pred[:num_anchors,0].detach().numpy(), pred[:num_anchors,1].detach()
 plt.scatter(batch.y[:num_anchors,0].detach().numpy(), batch.y[:num_anchors,1].detach().numpy(), label="actual a", marker="x",color="orange")#,alpha=0.1)
 plt.scatter(pred[num_anchors:,0].detach().numpy(), pred[num_anchors:,1].detach().numpy(), label="predicted",color="blue")#,alpha=0.1)
 plt.scatter(batch.y[num_anchors:,0].detach().numpy(), batch.y[num_anchors:,1].detach().numpy(), label="actual",color="orange")#,alpha=0.1)
+# plt.scatter(batch.y[:num_anchors,0].detach().numpy()[:n_neighbors], batch.y[:num_anchors,1].detach().numpy()[:n_neighbors], label="actual a", marker="X",color="black")#,alpha=0.1)
+
 plt.legend()
 plt.title(f"{modelname}: {np.round(torch.sqrt(loss_test).item(),2)}")
 plt.show()
