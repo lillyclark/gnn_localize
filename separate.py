@@ -117,20 +117,26 @@ if __name__=="__main__":
     torch.manual_seed(0)
     print("random seed is",0)
 
-    num_nodes = 100
-    num_anchors = 20
+    num_nodes = 500
+    num_anchors = 50
     print(num_nodes,"nodes",num_anchors,"num_anchors")
     true_locs, distance_matrix, k0, noise, nLOS, k1, measured = separable_dataset(num_nodes, num_anchors)
     print("k1:",k1)
 
-    lam = 1/(num_nodes**0.5)
-    mu = 1/(num_nodes**0.5)*0.1
+    lam = 1/(num_nodes**0.5)#*1.1
+    mu = 1/(num_nodes**0.5)*1.5
     eps = 0.001
-    n_init = 100
+    n_init = 1
     print("lam:",lam)
     print("mu:",mu)
     print("eps:",eps)
-    X, Y, ff = separate_dataset(measured, k0, k1, lam, mu)
+    print("n_init:",n_init)
+    k0 = 4
+    k1_init = num_nodes**2*(5/100)
+    step_size = 1
+    X, Y, ff = separate_dataset_find_k1(measured, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, plot=False)
+
+    # X, Y, ff = separate_dataset(measured, k0, k1, lam, mu)
     # print("n_init:",n_init)
     # X, Y, ff = separate_dataset_multiple_inits(measured, k0, k1, n_init=n_init, lam=lam, mu=mu, eps=eps)
 
@@ -154,7 +160,7 @@ if __name__=="__main__":
     # axes[1][2].imshow(Y)
     # axes[1][2].set_title("sparse matrix")
 
-    n_neighbors = 10
+    n_neighbors = 25
     print("n_neighbors:",n_neighbors)
     anchor_locs = true_locs[:num_anchors]
 

@@ -64,7 +64,7 @@ if modelname == "novel":
 
         # give a lower bound on k1
         k1_init = num_nodes**2*(5/100)
-        X, Y, ff = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=1, n_init=1, lam=0.1, mu=0.1, eps=0.001, plot=False)
+        X, Y, ff = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=1, n_init=n_init, lam=lam, mu=mu, eps=eps, plot=False)
 
         pred = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True,anchors_as_neighbors=anchors_as_neighbors)
         loss_test = loss_fn(pred[batch.nodes], batch.y[batch.nodes])
