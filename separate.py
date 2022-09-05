@@ -66,7 +66,7 @@ def separate_dataset(measured, k0, k1, lam=0.1, mu=0.1, eps=0.001, X=None, Y=Non
         X = solve_rank_problem(D, Y, lam, k0)
         ff = f(D, X, Y, lam, mu)
         if (fi-ff)/ff <= eps:
-            print(iter,"ff:",ff)
+            # print(iter,"ff:",ff)
             return X, Y, ff
         fi = ff
         # axes[iter][0].imshow(D)
@@ -91,24 +91,26 @@ def separate_dataset_find_k1(measured, k0, k1_init=0, step_size=1, n_init=1, lam
     step_size = int(num_edges*step_size/100)
     k1 = k1_init
 
-    print("k1:",k1)
+    # print("k1:",k1)
     X, Y, ff = separate_dataset_multiple_inits(measured, k0, k1, n_init=n_init, lam=lam, mu=mu, eps=eps)
     if ff == 0:
         return X, Y, ff
 
     while True:
         k1 += step_size
+        # print(k1, num_edges*(7/10))
         if k1 > num_edges*(7/10):
             print("Estimated sparsity exceeded 70%")
-            return X, Y, ff
-        print("k1:",k1)
+            return X, Y, ff, k1
+        # print("k1:",k1)
         X_, Y_, ff_ = separate_dataset_multiple_inits(measured, k0, int(k1), n_init=n_init, lam=lam, mu=mu, eps=eps)
+        # print("ff_:",ff_)
         delta = (ff - ff_)/ff
-        print("delta:",delta)
+        # print("delta:",delta)
         if delta < step_size_per:
-            print("***converged***")
-            print("best guess is k1:", k1)
-            return X_, Y_, ff_
+            # print("***converged***")
+            # print("best guess is k1:", k1)
+            return X_, Y_, ff_, k1
         ff = ff_
 
 if __name__=="__main__":

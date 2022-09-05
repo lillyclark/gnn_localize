@@ -104,10 +104,10 @@ def barycenter_weights(distance_matrix, indices, reg=1e-5, dont_square=False):
             perfect = False
             w, res, rnk, s = lstsq(C, v)
         B[i, :] = w / np.sum(w)
-    if perfect:
-        print("able to recover weights exactly")
-    else:
-        print("using least squares to recover weights")
+    # if perfect:
+    #     print("able to recover weights exactly")
+    # else:
+    #     print("using least squares to recover weights")
     return B
 
 def weight_to_mat(weights, indices):
@@ -122,8 +122,6 @@ def neighbors(distance_matrix, n_neighbors):
     return indices[:,1:n_neighbors+1]
 
 def solve_like_LLE(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_matrix,dont_square=False,anchors_as_neighbors=False):
-    # np.random.seed(1)
-    # torch.manual_seed(1)
     if anchors_as_neighbors:
         indices = np.vstack([np.linspace(0,n_neighbors-1,n_neighbors,dtype=int)]*num_nodes)
     else:
