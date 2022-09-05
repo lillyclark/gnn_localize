@@ -10,6 +10,7 @@ from torch_geometric.loader import DataLoader
 import scipy.sparse as sp
 
 from scipy.io import loadmat
+from sklearn.linear_model import LinearRegression
 
 # from torch.nn.functional import normalize
 
@@ -42,12 +43,6 @@ def matrix_from_locs(locs):
             d = pdist(locs[i].unsqueeze(0), locs[j].unsqueeze(0))
             distance_matrix[i][j] = d
     return distance_matrix
-
-def is_anchor(str_name):
-    if 'spot4' in str_name:
-        return False
-    else:
-        return True
 
 def modified_adj(num_nodes, num_anchors, threshold=1.0):
     # nodes is total nodes, including anchors
@@ -405,3 +400,177 @@ def process_dataset(filename, batch_size, threshold=1000, fake_links=False):
 
     data_loader = DataLoader(graphs, batch_size=batch_size, shuffle=True)
     return data_loader, nodes
+
+def is_anchor(str_name):
+    if str_name == 'scom-base1':
+        return True
+    if '-' in str_name:
+        return False
+    else:
+        return True
+
+def is_not_anchor(str_name):
+    return not is_anchor(str_name)
+
+def pathloss_to_dist(pathloss, eta, Kref):
+    return 10**((pathloss-Kref)/(eta*10))
+
+def get_eta_Kref(pathlosses, distances):
+    print(pathlosses.shape)
+    print(distances.shape)
+    distances = 10*np.log10(distances)
+    reg = LinearRegression().fit(distances.reshape(-1,1), pathlosses)
+    return reg.coef_, reg.intercept_
+
+def pick_a_moment(filename='datasets/sep18d_clean.csv'):
+    start = time.time()
+    data = pd.read_csv(filename,header=0)
+    data_ = data[data['tags'].isna()] # only real data
+    print(f"Loaded dataset in {time.time()-start} seconds")
+
+    times = data_['timestamp']
+    unique_times = tuple(set(times))
+    print("There are",len(unique_times),"moments to choose from")
+
+    max_nodes = 0
+    best_i = None
+    best_moment = None
+
+    for i, moment in enumerate(unique_times):
+        data = data_[data_['timestamp']==moment]
+        transmitters = set(data['transmitter'])
+        receivers = set(data['receiver'])
+        nodes = tuple(transmitters.union(receivers))
+        node_idx = dict(zip(nodes, range(len(nodes))))
+        num_nodes = len(nodes)
+        if num_nodes > max_nodes:
+            max_nodes = num_nodes
+            best_i = i
+            best_moment = moment
+
+    print("Best i:", best_i)
+    print("Best moment:", best_moment)
+    print("Max nodes:", max_nodes)
+    return best_moment, max_nodes
+
+
+def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kref=40, threshold=50.0):
+    start = time.time()
+    data = pd.read_csv(filename,header=0)
+    data = data[data['tags'].isna()] # only real data
+    print(f"Loaded dataset in {time.time()-start} seconds")
+
+    times = data['timestamp']
+    unique_times = tuple(set(times))
+    print("There are",len(unique_times),"moments to choose from")
+    moment = unique_times[moment]
+    print("moment:",moment)
+
+    data = data[data['timestamp']==moment]
+    transmitters = set(data['transmitter'])
+    receivers = set(data['receiver'])
+    nodes = tuple(transmitters.union(receivers))
+    nodes = sorted(nodes)
+    nodes = sorted(nodes,key=is_not_anchor)
+    print(nodes)
+    node_idx = dict(zip(nodes, range(len(nodes))))
+    num_nodes = len(nodes)
+
+    print(data)
+
+    noisy_distance_matrix = np.zeros((num_nodes, num_nodes))
+    true_locs = np.zeros((num_nodes, 2)) # TODO 3D
+    anchor_mask = torch.Tensor([is_anchor(node) for node in nodes]).bool()
+    node_mask = ~anchor_mask
+
+    pathlosses = []
+    distances = []
+
+    LOS = torch.zeros((num_nodes, num_nodes))
+    nLOS = torch.zeros((num_nodes, num_nodes))
+
+    for j in range(len(data)):
+        tx, rx = data.iloc[j]['transmitter'], data.iloc[j]['receiver']
+        tx_id, rx_id = node_idx[tx], node_idx[rx]
+        pathloss = float(data.iloc[j]['measured_path_loss_dB'])
+        noisy_distance_matrix[tx_id][rx_id] = pathloss_to_dist(pathloss, eta, Kref)
+        true_locs[tx_id] = data.iloc[j]['transmitter_x'], data.iloc[j]['transmitter_y']
+        true_locs[rx_id] = data.iloc[j]['receiver_x'], data.iloc[j]['receiver_y']
+        # pathlosses.append(pathloss)
+        # distances.append(np.sum((true_locs[tx_id]-true_locs[rx_id])**2)**0.5)
+        if data.iloc[j]['visible'] == 0.0:
+            nLOS[tx_id][rx_id] = 1
+        if data.iloc[j]['visible'] == 1.0:
+            LOS[tx_id][rx_id] = 1
+            pathlosses.append(pathloss)
+            distances.append(np.sum((true_locs[tx_id]-true_locs[rx_id])**2)**0.5)
+
+    print("*****")
+    k1_nLOS = torch.sum(nLOS)
+    print("nLOS:",k1_nLOS)
+
+    print("eta, Kref:")
+    print(get_eta_Kref(np.array(pathlosses), np.array(distances)))
+    # assert False
+
+    k1_missing = np.sum(noisy_distance_matrix==0)-num_nodes
+    print("missing:", k1_missing)
+
+    print("k1:",k1_nLOS+k1_missing)
+    print("%:",(k1_nLOS+k1_missing)/(num_nodes*(num_nodes-1)))
+    print("*****")
+
+    noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
+    print("NOISY MATRIX")
+    print(np.round(noisy_distance_matrix.numpy(),0))
+    true_locs = torch.Tensor(true_locs)
+    # print("TRUE LOCATIONS")
+    # print(true_locs)
+
+    print("TRUE DIST MATRIX")
+    true_dist = matrix_from_locs(true_locs)
+    print(np.round(true_dist))
+
+    # fig, (ax0,ax1,ax2) = plt.subplots(1,3)
+    #
+    # ax0.hist(noisy_distance_matrix[LOS!=0].flatten()-true_dist[LOS!=0].flatten(),bins=20)
+    # ax0.set_title("how much noise is there for LOS links")
+    LOS_err = (noisy_distance_matrix[LOS!=0].flatten()-true_dist[LOS!=0].flatten()).numpy()
+    print("LOS mean & std dev",np.mean(LOS_err),np.std(LOS_err))
+    #
+    # # ax1.hist(noisy_distance_matrix[nLOS!=0].flatten()-true_dist[nLOS!=0].flatten(),bins=20)
+    # # ax1.set_title("how much noise is there for nLOS")
+    nLOS_err = (noisy_distance_matrix[nLOS!=0].flatten()-true_dist[nLOS!=0].flatten()).numpy()
+    print("nLOS mean & std dev",np.mean(nLOS_err),np.std(nLOS_err))
+    #
+    # ax1.hist(noisy_distance_matrix[noisy_distance_matrix!=0].flatten()-true_dist[noisy_distance_matrix!=0].flatten(),bins=20)
+    # ax1.set_title("how much noise is there when a measurement is present")
+    meas_err = (noisy_distance_matrix[noisy_distance_matrix!=0].flatten()-true_dist[noisy_distance_matrix!=0].flatten()).numpy()
+    print("mean mean & std dev",np.mean(meas_err),np.std(meas_err))
+    #
+    print("Assuming we know the actual max distance....")
+    fill_max = torch.max(true_dist)+1
+    noisy_distance_matrix[noisy_distance_matrix==0] = fill_max
+    # np.fill_diagonal(noisy_distance_matrix,0)
+    noisy_distance_matrix.fill_diagonal_(0)
+    #
+    # ax2.hist(noisy_distance_matrix.flatten()-true_dist.flatten(),bins=20)
+    # ax2.set_title("how much noise is there when missing="+str(fill_max))
+    all_err = (noisy_distance_matrix.flatten()-true_dist.flatten()).numpy()
+    print("all mean & std dev",np.mean(all_err),np.std(all_err))
+
+    # plt.show()
+
+    features = noisy_distance_matrix.clone()
+    adjacency_matrix = features < threshold
+    features[features > threshold]=0
+    features = normalize_tensor(features)
+    normalized_adjacency_matrix = normalize_tensor(adjacency_matrix.float())
+
+    data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
+    return DataLoader([data],shuffle=False), num_nodes, noisy_distance_matrix
+
+if __name__=="__main__":
+    print("executing process_dataset.py")
+    load_a_moment(eta=4.57435973, Kref=13.111276899657597)
+    # pick_a_moment()
