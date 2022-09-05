@@ -31,6 +31,7 @@ def normalize_tensor(x):
     D = x.sum(1)
     r_inv = (D**-0.5).flatten()
     r_inv[torch.isnan(r_inv)]=0
+    r_inv[torch.isinf(r_inv)]=0
     r_mat_inv = torch.diag(r_inv)
     mx = torch.mm(torch.mm(r_mat_inv,x),r_mat_inv)
     return mx
@@ -462,9 +463,9 @@ def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kr
 
     times = data['timestamp']
     unique_times = tuple(set(times))
-    print("There are",len(unique_times),"moments to choose from")
+    # print("There are",len(unique_times),"moments to choose from")
     moment = unique_times[moment]
-    print("moment:",moment)
+    # print("moment:",moment)
 
     data = data[data['timestamp']==moment]
     transmitters = set(data['transmitter'])
@@ -472,11 +473,11 @@ def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kr
     nodes = tuple(transmitters.union(receivers))
     nodes = sorted(nodes)
     nodes = sorted(nodes,key=is_not_anchor)
-    print(nodes)
+    # print(nodes)
     node_idx = dict(zip(nodes, range(len(nodes))))
     num_nodes = len(nodes)
 
-    print(data)
+    # print(data)
 
     noisy_distance_matrix = np.zeros((num_nodes, num_nodes))
     true_locs = np.zeros((num_nodes, 2)) # TODO 3D
@@ -521,15 +522,15 @@ def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kr
     print("*****")
 
     noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
-    print("NOISY MATRIX")
-    print(np.round(noisy_distance_matrix.numpy(),0))
+    # print("NOISY MATRIX")
+    # print(np.round(noisy_distance_matrix.numpy(),0))
     true_locs = torch.Tensor(true_locs)
     # print("TRUE LOCATIONS")
     # print(true_locs)
 
-    print("TRUE DIST MATRIX")
+    # print("TRUE DIST MATRIX")
     true_dist = matrix_from_locs(true_locs)
-    print(np.round(true_dist))
+    # print(np.round(true_dist))
 
     # fig, (ax0,ax1,ax2) = plt.subplots(1,3)
     #
@@ -548,7 +549,7 @@ def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kr
     meas_err = (noisy_distance_matrix[noisy_distance_matrix!=0].flatten()-true_dist[noisy_distance_matrix!=0].flatten()).numpy()
     print("mean mean & std dev",np.mean(meas_err),np.std(meas_err))
     #
-    print("Assuming we know the actual max distance....")
+    # print("Assuming we know the actual max distance....")
     fill_max = torch.max(true_dist)+1
     noisy_distance_matrix[noisy_distance_matrix==0] = fill_max
     # np.fill_diagonal(noisy_distance_matrix,0)
@@ -566,7 +567,6 @@ def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kr
     features[features > threshold]=0
     features = normalize_tensor(features)
     normalized_adjacency_matrix = normalize_tensor(adjacency_matrix.float())
-
     data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
     return DataLoader([data],shuffle=False), num_nodes, noisy_distance_matrix
 
