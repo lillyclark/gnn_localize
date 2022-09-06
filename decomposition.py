@@ -53,19 +53,34 @@ def denoise_via_adj(noisy_distance_matrix,K,threshold=1.2,normalize=False):
     print("new rank:",np.linalg.matrix_rank(new_x))
     return new_x, adjK, thresholded_noisy_distance_matrix
 
-def solve_direct(noisy_distance_matrix, anchor_locs, mode="None"):
+def solve_direct(noisy_distance_matrix, anchor_locs, mode="None", dont_square=False):
     x = noisy_distance_matrix
     num_nodes = x.shape[0]
     num_anchors = anchor_locs.shape[0]
     M = np.zeros(x.shape)
     for i in range(num_nodes):
         for j in range(num_nodes):
-            M[i][j] = (x[0][j]**2 + x[i][0]**2 - x[i][j]**2)/2
+            if dont_square:
+                M[i][j] = (x[0][j] + x[i][0] - x[i][j])/2
+            else:
+                M[i][j] = (x[0][j]**2 + x[i][0]**2 - x[i][j]**2)/2
+
     q, v = np.linalg.eig(M)
+    print("rank of M:",np.linalg.matrix_rank(M, tol=0.001))
+    # print("q:",q)
+    # plt.plot(q.real)
+    # plt.show()
+
     locs = np.zeros((num_nodes,2))
-    q = q.real
+    # locs[:,0] = np.sqrt(q[0]).real*v[:,0].real
+    # locs[:,1] = np.sqrt(q[1]).real*v[:,1].real
+
     locs[:,0] = np.sqrt(q[0])*v[:,0]
     locs[:,1] = np.sqrt(q[1])*v[:,1]
+
+
+    # print(anchor_locs)
+    # print(locs)
 
     if mode == "None":
         pass

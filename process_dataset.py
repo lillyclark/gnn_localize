@@ -417,8 +417,8 @@ def pathloss_to_dist(pathloss, eta, Kref):
     return 10**((pathloss-Kref)/(eta*10))
 
 def get_eta_Kref(pathlosses, distances):
-    print(pathlosses.shape)
-    print(distances.shape)
+    # print(pathlosses.shape)
+    # print(distances.shape)
     distances = 10*np.log10(distances)
     reg = LinearRegression().fit(distances.reshape(-1,1), pathlosses)
     return reg.coef_, reg.intercept_
@@ -570,7 +570,75 @@ def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kr
     data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
     return DataLoader([data],shuffle=False), num_nodes, noisy_distance_matrix
 
+def load_cellphone_data(num_anchors=3, threshold=10.0):
+    num_nodes = 11
+
+    anchor_mask = torch.Tensor([i < num_anchors for i in range(num_nodes)]).bool()
+    node_mask = ~anchor_mask
+
+    true_locs = torch.Tensor([[1.0, 14.0, 3.0, 21.0, 9.0, 22.0, 10.0, 3.0, 27.0, 20.0, 18.0],
+    	     [7.0, 3.0, 19.0, 18.0, 33.0, 3.0, 11.0, 32.0, 27.0, 12.0, 34.0]]).T
+
+    # convert to meters
+    true_locs *= 0.3048
+
+    # First Row represents the x-coordinates of the nodes, and the second row represents the y-coordinates. All values are in feet.
+
+    pathlosses = np.array([[-100.00, -68.308, -62.299, -67.051, -68.141, -66.400, -60.864, -77.891, -68.217, -69.553, -68.678],
+    	      [-67.414, -100.00, -68.205, -65.299, -69.623, -55.270, -59.656, -71.891, -69.178, -65.439, -74.507],
+    	      [-60.025, -67.713, -100.00, -65.146, -64.812, -67.982, -58.420, -62.949, -70.291, -68.334, -69.354],
+    	      [-68.820, -67.432, -67.988, -100.00, -68.111, -64.830, -65.680, -70.307, -56.207, -53.938, -67.278],
+    	      [-66.090, -68.082, -64.801, -64.279, -100.00, -73.314, -63.975, -49.990, -62.357, -71.328, -54.147],
+    	      [-67.572, -55.854, -70.355, -64.174, -77.715, -100.00, -77.591, -88.658, -68.432, -57.822, -73.303],
+    	      [-62.527, -62.622, -62.680, -65.855, -68.123, -70.461, -100.00, -70.402, -73.127, -65.211, -79.361],
+    	      [-77.521, -74.398, -65.662, -70.068, -50.838, -86.564, -70.062, -100.00, -70.560, -81.057, -67.722],
+    	      [-68.896, -70.385, -72.194, -54.641, -63.342, -67.637, -70.941, -69.543, -100.00, -65.686, -63.720],
+    	      [-66.488, -63.775, -66.978, -51.330, -69.295, -56.240, -63.301, -78.221, -65.041, -100.00, -70.042],
+    	      [-72.078, -80.838, -73.341, -68.369, -57.963, -76.385, -79.549, -68.691, -66.980, -73.718, -100.00]])
+
+    true_dist = matrix_from_locs(true_locs)
+    # print("true dist squared:")
+    # print(true_dist**2)
+
+    # pathlosses = 10*np.log10(np.array(true_dist))
+
+    pl = []
+    dist = []
+    for i in range(num_nodes):
+        for j in range(num_nodes):
+            if i != j:
+                pl.append(pathlosses[i][j])
+                dist.append(true_dist[i][j])
+
+    eta, Kref = get_eta_Kref(np.array(pl), np.array(dist))
+    print(eta, Kref)
+
+    # logdist = 10*np.log10(np.array(dist))
+    # pl = np.array(pl)
+    # plt.scatter(logdist, pl)
+    # print(min(logdist), max(logdist))
+    # plt.plot([min(logdist), max(logdist)],
+    #         [eta.item()*min(logdist)+Kref.item(), eta.item()*max(logdist)+Kref.item()])
+    # plt.show()
+
+    noisy_distance_matrix = pathloss_to_dist(pathlosses, eta, Kref)
+    noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
+    noisy_distance_matrix.fill_diagonal_(0)
+
+    all_err = (noisy_distance_matrix.flatten()-true_dist.flatten()).numpy()
+    print("all mean & std dev",np.mean(all_err),np.std(all_err))
+
+    features = noisy_distance_matrix.clone()
+    adjacency_matrix = features < threshold
+    features[features > threshold]=0
+    features = normalize_tensor(features)
+    normalized_adjacency_matrix = normalize_tensor(adjacency_matrix.float())
+    data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
+    return DataLoader([data],shuffle=False), num_nodes, noisy_distance_matrix
+
+
 if __name__=="__main__":
     print("executing process_dataset.py")
-    load_a_moment(eta=4.57435973, Kref=13.111276899657597)
+    # load_a_moment(eta=4.57435973, Kref=13.111276899657597)
     # pick_a_moment()
+    load_cellphone_data()
