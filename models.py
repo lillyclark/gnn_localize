@@ -34,15 +34,11 @@ class GCN(nn.Module):
 class littleGCN(nn.Module):
     def __init__(self, nfeat, nhid, nout, dropout):
         super(littleGCN, self).__init__()
-        self.gc1 = GraphConvolution(nfeat, nhid)
-        self.linear2 = nn.Linear(nhid, nout)
-        self.dropout = dropout
+        print("initializing little GCN with just one convolution, no bias")
+        self.gc1 = GraphConvolution(nfeat, nout, bias=False)
 
     def forward(self, x, adj):
-        x = F.relu(self.gc1(x, adj))
-        x = F.dropout(x, self.dropout, training=self.training)
-        x = self.linear2(x)
-        return x
+        return self.gc1(x, adj)
 
 class gfNN(nn.Module):
     def __init__(self, nfeat, nhid, nout, dropout):

@@ -94,7 +94,7 @@ def separate_dataset_find_k1(measured, k0, k1_init=0, step_size=1, n_init=1, lam
     # print("k1:",k1)
     X, Y, ff = separate_dataset_multiple_inits(measured, k0, k1, n_init=n_init, lam=lam, mu=mu, eps=eps)
     if ff == 0:
-        return X, Y, ff
+        return X, Y, ff, k1
 
     while True:
         k1 += step_size

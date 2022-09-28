@@ -549,8 +549,9 @@ def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kr
     meas_err = (noisy_distance_matrix[noisy_distance_matrix!=0].flatten()-true_dist[noisy_distance_matrix!=0].flatten()).numpy()
     print("mean mean & std dev",np.mean(meas_err),np.std(meas_err))
     #
-    # print("Assuming we know the actual max distance....")
+    print("Assuming we know the actual max distance....")
     fill_max = torch.max(true_dist)+1
+    print("FILL MAX:", fill_max)
     noisy_distance_matrix[noisy_distance_matrix==0] = fill_max
     # np.fill_diagonal(noisy_distance_matrix,0)
     noisy_distance_matrix.fill_diagonal_(0)
@@ -601,6 +602,8 @@ def load_cellphone_data(num_anchors=3, threshold=10.0):
     # print(true_dist**2)
 
     # pathlosses = 10*np.log10(np.array(true_dist))
+    # print("making matrix symmetric right from the start")
+    # pathlosses = (pathlosses + pathlosses.T)/2
 
     pl = []
     dist = []
@@ -613,6 +616,8 @@ def load_cellphone_data(num_anchors=3, threshold=10.0):
     eta, Kref = get_eta_Kref(np.array(pl), np.array(dist))
     print(eta, Kref)
 
+    # eta, Kref = -3, -50
+
     # logdist = 10*np.log10(np.array(dist))
     # pl = np.array(pl)
     # plt.scatter(logdist, pl)
@@ -620,6 +625,12 @@ def load_cellphone_data(num_anchors=3, threshold=10.0):
     # plt.plot([min(logdist), max(logdist)],
     #         [eta.item()*min(logdist)+Kref.item(), eta.item()*max(logdist)+Kref.item()])
     # plt.show()
+
+    if False:
+        d_ = pathloss_to_dist(pl, eta, Kref)
+        noise = d_ - dist
+        plt.plot(noise)
+        plt.show()
 
     noisy_distance_matrix = pathloss_to_dist(pathlosses, eta, Kref)
     noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)

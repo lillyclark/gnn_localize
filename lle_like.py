@@ -121,7 +121,7 @@ def neighbors(distance_matrix, n_neighbors):
     indices = np.argsort(distance_matrix.numpy(), axis=1)
     return indices[:,1:n_neighbors+1]
 
-def solve_like_LLE(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_matrix,dont_square=False,anchors_as_neighbors=False):
+def solve_like_LLE(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_matrix,dont_square=False,anchors_as_neighbors=False, return_indices=False):
     if anchors_as_neighbors:
         indices = np.vstack([np.linspace(0,n_neighbors-1,n_neighbors,dtype=int)]*num_nodes)
     else:
@@ -139,6 +139,8 @@ def solve_like_LLE(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_
     # print("RES:",res)
     # print(f"{time.time()-start} to find locs")
     pred = np.vstack((anchor_locs,node_locs))
+    if return_indices:
+        return torch.Tensor(pred), indices
     return torch.Tensor(pred)
 
 def solve_iteratively(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distance_matrix,dont_square=False):

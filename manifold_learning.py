@@ -25,7 +25,7 @@ def scale_to(input, tensor_to_match, mask):
 # num_batches = len(data_loader)
 # print(num_batches, "batches")
 start = time.time()
-data_loader, num_nodes = fake_dataset(num_nodes, num_anchors, threshold=threshold)
+data_loader, num_nodes, _ = fake_dataset(num_nodes, num_anchors, threshold=threshold)
 print(f"loaded data in {time.time()-start} secs")
 
 model = gfNN(nfeat=2, nhid=2, nout=2, dropout=0)

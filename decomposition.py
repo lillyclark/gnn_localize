@@ -27,6 +27,13 @@ def reduce_rank(X,k=4,make_sym=False):
     X_ = U.dot(np.diag(S)).dot(V)
     return X_
 
+def eig_(X):
+    eigenValues, eigenVectors = np.linalg.eig(X)
+    idx = np.argsort(eigenValues)[::-1]
+    eigenValues = eigenValues[idx]
+    eigenVectors = eigenVectors[:,idx]
+    return (eigenValues, eigenVectors)
+
 def denoise_via_SVD(euclidean_matrix,k=4,fill_diag=False,take_sqrt=False):
     x = euclidean_matrix
     new_x = torch.Tensor(reduce_rank(x,k))
@@ -58,6 +65,7 @@ def solve_direct(noisy_distance_matrix, anchor_locs, mode="None", dont_square=Fa
     num_nodes = x.shape[0]
     num_anchors = anchor_locs.shape[0]
     M = np.zeros(x.shape)
+
     for i in range(num_nodes):
         for j in range(num_nodes):
             if dont_square:
@@ -65,9 +73,9 @@ def solve_direct(noisy_distance_matrix, anchor_locs, mode="None", dont_square=Fa
             else:
                 M[i][j] = (x[0][j]**2 + x[i][0]**2 - x[i][j]**2)/2
 
-    q, v = np.linalg.eig(M)
-    print("rank of M:",np.linalg.matrix_rank(M, tol=0.001))
-    # print("q:",q)
+    q, v = eig_(M) #np.linalg.eig(M)
+    # print("rank of M:",np.linalg.matrix_rank(M, tol=0.001))
+    # print("q:",np.round(q,2))
     # plt.plot(q.real)
     # plt.show()
 
@@ -77,7 +85,6 @@ def solve_direct(noisy_distance_matrix, anchor_locs, mode="None", dont_square=Fa
 
     locs[:,0] = np.sqrt(q[0])*v[:,0]
     locs[:,1] = np.sqrt(q[1])*v[:,1]
-
 
     # print(anchor_locs)
     # print(locs)

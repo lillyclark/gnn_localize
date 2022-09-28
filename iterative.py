@@ -17,7 +17,7 @@ if __name__=="__main__":
     print("random seed is",0)
 
     num_nodes = 100
-    num_anchors = 20
+    num_anchors = 80
     print(num_nodes,"nodes",num_anchors,"num_anchors")
     true_locs, distance_matrix, k0, noise, nLOS, k1, measured = separable_dataset(num_nodes, num_anchors)
     print("k1:",k1)
@@ -34,7 +34,7 @@ if __name__=="__main__":
     # X, Y, ff = separate_dataset_multiple_inits(measured, k0, k1, n_init=n_init, lam=lam, mu=mu, eps=eps)
 
 
-    n_neighbors = 20
+    n_neighbors = 5
     print("n_neighbors:",n_neighbors)
     anchor_locs = true_locs[:num_anchors]
 
