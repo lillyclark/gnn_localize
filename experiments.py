@@ -439,26 +439,27 @@ def experiment3():
 def experiment4():
     print("EXPERIMENT 4: vary n_neighbors")
     filename = "experiment4.txt"
-    figname = "experiment4_c.jpg"
+    figname = "experiment4_runtime_ci.jpg"
     num_nodes = 500
     num_anchors = 50
     loss_fn = torch.nn.MSELoss()
 
     # NOVEL PARAMS
-    # n_neighbor_list = [5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100]
+    n_neighbor_list = [5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100]
     # n_neighbor_list = [20,40,60,80,100,120,140,160,180,200,220,240,260,280,300]
-    n_neighbor_list = [3,25,50,75,100,125,150,175,200,225,250,275,300,325,350,375,400,425,450,475,499]
+    # n_neighbor_list = [3,25,50,75,100,125,150,175,200,225,250,275,300,325,350,375,400,425,450,475,499]
+    # n_neighbor_list = [10,20,30,40,50,60,70,80,90,100,110,120,130,140,150]
+    # n_neighbor_list = [5,10,15,20,25,30,40,50,100,150,200,300]
     # n_neighbor_list = [3,6,9,12,15,18,21,24,27,30,33,36,39,42,45,48,51]
     # n_neighbor_list = [5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30]
     k0 = 4
     lam = 1/(num_nodes**0.5)*1.1
     mu = 1/(num_nodes**0.5)*1.1
     eps = 0.001
-    n_init = 10
+    n_init = 1
     k1_init = num_nodes**2*(5/100)
     step_size = 1
 
-    start = time.time()
     data_loader, num_nodes, noisy_distance_matrix = their_dataset(num_nodes, num_anchors, threshold=10)
     print("dataset loaded...")
 
@@ -494,13 +495,154 @@ def experiment4():
         _ = 0
         result_list = []
         k1_list = []
+        runtime_list = []
+        res_ci = []
+        run_ci = []
         for n_neighbors in n_neighbor_list:
-            print("n_neighbors:",n_neighbors)
-            _ += 1
+            res = []
+            run = []
+            iters = 10
+            for iter in range(iters):
+                print("n_neighbors:",n_neighbors)
+                _ += 1
+                anchor_locs = batch.y[batch.anchors]
+                noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
+                start = time.time()
+                X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, plot=False)
+                novel_pred, indices = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True, anchors_as_neighbors=False, return_indices=True)
+                novel_solve_time = time.time()-start
+                start = time.time()
+                novel_error = loss_fn(novel_pred[batch.nodes], batch.y[batch.nodes])
+                novel_error = torch.sqrt(novel_error).item()
+                novel_predict_time = time.time()-start
+                novel_total_time = novel_solve_time + novel_predict_time
+                res.append(novel_error)
+                run.append(novel_total_time)
+            res, run = np.array(res), np.array(run)
+            writeLine(np.mean(res), _==len(n_neighbor_list))
+            result_list.append(np.mean(res))
+            runtime_list.append(np.mean(run))
+            res_ci.append(1.96 * np.std(res)/np.sqrt(len(res)))
+            run_ci.append(1.96 * np.std(run)/np.sqrt(len(run)))
+            print("res:",res,"ci:",res_ci[-1])
+            print("run:",run,"ci:",run_ci[-1])
+    print("...done")
+    writeLine(k1_list, True)
+
+    fig, ax1 = plt.subplots(figsize=(6,3))
+
+    ax1.plot(n_neighbor_list, result_list, marker='o',color='blue')
+    ax1.fill_between(n_neighbor_list, (np.array(result_list)-np.array(res_ci)), (np.array(result_list)+np.array(res_ci)), color='blue', alpha=.1)
+    ax1.set_xlabel('Number of neighbors')
+    ax1.set_ylabel('RMSE')
+    ax1.tick_params(axis='y', labelcolor='blue')
+
+    ax2 = ax1.twinx()
+    ax2.plot(n_neighbor_list, runtime_list, marker='o', color='orange')
+    ax2.fill_between(n_neighbor_list, (np.array(runtime_list)-np.array(run_ci)), (np.array(runtime_list)+np.array(run_ci)), color='orange', alpha=.1)
+    ax2.set_ylabel('Runtime (solve + predict, sec)')
+    ax2.tick_params(axis='y', labelcolor='orange')
+
+    plt.tight_layout()
+    plt.savefig(figname)
+    print("plot saved to",figname)
+
+def experiment5():
+    print("EXPERIMENT 5: vary percentage nLOS")
+    filename = "experiment5.txt"
+    figname = "experiment5.jpg"
+    num_nodes = 500
+    num_anchors = 50
+    loss_fn = torch.nn.MSELoss()
+
+    # DATA PARAMS
+    percent_nLOS_list = [0,10,20,30,40,50]
+    # percent_nLOS_list = [0,10]
+
+    # GCN PARAMS
+    threshold = 1.2
+    nhid = 2000
+    nout = 2
+    dropout = 0.5
+    lr = 0.01
+    weight_decay = 0
+    num_epochs = 200
+
+    # NOVEL PARAMS
+    n_neighbors = 15
+    k0 = 4
+    lam = 1/(num_nodes**0.5)*1.1
+    mu = 1/(num_nodes**0.5)*1.1
+    eps = 0.001
+    n_init = 1
+
+    k1_init = 0 #num_nodes**2*(0/100)
+    step_size = 1
+    eps_k1 = 40000
+
+    def writeA():
+        nowTime = datetime.datetime.now().strftime('%Y-%m-%d-%H_%M_%S')  # Get the Now time
+        file_handle = open(filename, mode='a')
+        file_handle.write('=====================================\n')
+        file_handle.write(nowTime + '\n')
+        file_handle.write("num_nodes: " + str(num_nodes) + '\n')
+        file_handle.write("num_anchors: " + str(num_anchors) + '\n')
+
+        file_handle.write("threshold: " + str(threshold) + '\n')
+        file_handle.write("nhid: " + str(nhid) + '\n')
+        file_handle.write("nout: " + str(nout) + '\n')
+        file_handle.write("dropout: " + str(dropout) + '\n')
+        file_handle.write("lr: " + str(lr) + '\n')
+        file_handle.write("weight_decay: " + str(weight_decay) + '\n')
+        file_handle.write("num_epochs: " + str(num_epochs) + '\n')
+
+        file_handle.write("n_neighbors: " + str(n_neighbors) + '\n')
+        file_handle.write("k0: " +str(k0) + '\n')
+        file_handle.write("lam: " +str(np.round(lam,3)) + '\n')
+        file_handle.write("mu: " +str(np.round(mu,3)) + '\n')
+        file_handle.write("eps: " +str(eps) + '\n')
+        file_handle.write("n_init: " +str(n_init) + '\n')
+        file_handle.write("k1_init: " +str(k1_init) + '\n')
+        file_handle.write("step_size: " +str(step_size) + '\n')
+        file_handle.write("eps_k1: " +str(eps_k1) + '\n')
+
+        file_handle.write("percent_nLOS_list: " +str(percent_nLOS_list) + '\n')
+        file_handle.close()
+        print("Overview written to", filename)
+
+    def writeLine(value, end=False):
+        file_handle = open(filename, mode='a')
+        if end:
+            file_handle.write(str(value)+"\n")
+        else:
+            file_handle.write(str(value)+", ")
+        file_handle.close()
+
+    writeA()
+
+    novel_list = []
+    gcn_list = []
+
+    for p_nLOS in percent_nLOS_list:
+        data_loader, num_nodes, noisy_distance_matrix = fake_dataset(num_nodes, num_anchors, threshold=threshold, p_nLOS=p_nLOS)
+        print("dataset loaded...")
+
+        print("GCN....")
+        model = GCN(nfeat=num_nodes, nhid=nhid, nout=nout, dropout=dropout)
+        optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+        gcn_train_time = train_GCN(model, optimizer, loss_fn, data_loader, num_epochs)
+        gcn_pred, gcn_error, gcn_predict_time = test_GCN(model, loss_fn, data_loader)
+        gcn_total_time = gcn_train_time + gcn_predict_time
+        print("...done")
+        gcn_list.append(gcn_error)
+        print("gcn error:",gcn_list)
+
+        print("novel...")
+        for batch in data_loader:
             anchor_locs = batch.y[batch.anchors]
             noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
             start = time.time()
-            X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, plot=False)
+            X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, eps_k1=eps_k1, plot=False)
             novel_pred, indices = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True, anchors_as_neighbors=False, return_indices=True)
             novel_solve_time = time.time()-start
             start = time.time()
@@ -508,28 +650,24 @@ def experiment4():
             novel_error = torch.sqrt(novel_error).item()
             novel_predict_time = time.time()-start
             novel_total_time = novel_solve_time + novel_predict_time
-            writeLine(novel_error, _==len(n_neighbor_list))
-            result_list.append(novel_error)
-            k1_list.append(k1)
-    print("...done")
-    writeLine(k1_list, True)
+        print("...done")
+        novel_list.append(novel_error)
+        print("novel error:", novel_list)
+
+    writeLine("Novel error:",False)
+    writeLine(novel_list, True)
+    writeLine("GCN error:",False)
+    writeLine(gcn_list, True)
 
     fig, ax1 = plt.subplots(figsize=(6,3))
-
-    ax1.plot(n_neighbor_list, result_list, marker='o',color='blue')
-    ax1.set_xlabel('Number of neighbors')
+    ax1.plot(percent_nLOS_list, novel_list, marker='o',color='blue',label="Novel")
+    ax1.plot(percent_nLOS_list, gcn_list, marker='o',color='orange',label="GCN")
+    ax1.set_xlabel('% nLOS')
     ax1.set_ylabel('RMSE')
-    # ax1.tick_params(axis='y', labelcolor='blue')
-
-    # ax2 = ax1.twinx()
-    # ax2.plot(n_neighbor_list, k1_list, marker='o', color='orange')
-    # ax2.set_ylabel('Sparsity estimate (k1)')
-    # ax2.tick_params(axis='y', labelcolor='orange')
-
+    ax1.legend()
     plt.tight_layout()
     plt.savefig(figname)
     print("plot saved to",figname)
-    print(time.time()-start,"secs")
 
 if __name__ == "__main__":
     seed_ = 0
@@ -539,4 +677,5 @@ if __name__ == "__main__":
     # experiment1()
     # experiment2()
     # experiment3()
-    experiment4()
+    # experiment4()
+    experiment5()

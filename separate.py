@@ -84,33 +84,30 @@ def separate_dataset_multiple_inits(measured, k0, k1, n_init=10, lam=0.1, mu=0.1
             best_X, best_Y, best_ff = X, Y, ff
     return best_X, best_Y, best_ff
 
-def separate_dataset_find_k1(measured, k0, k1_init=0, step_size=1, n_init=1, lam=0.1, mu=0.1, eps=0.001, plot=False):
+def separate_dataset_find_k1(measured, k0, k1_init=0, step_size=1, n_init=1, lam=0.1, mu=0.1, eps=0.001, eps_k1=0.01, plot=False):
     """ step_size in percentage of edges """
     num_edges = int(measured.shape[0]*measured.shape[1])
-    step_size_per = step_size/100
     step_size = int(num_edges*step_size/100)
     k1 = k1_init
 
-    # print("k1:",k1)
     X, Y, ff = separate_dataset_multiple_inits(measured, k0, k1, n_init=n_init, lam=lam, mu=mu, eps=eps)
     if ff == 0:
         return X, Y, ff, k1
+    # print("k1_init:",k1)
+    # print("ff_init:",ff)
 
     while True:
         k1 += step_size
-        # print(k1, num_edges*(7/10))
-        if k1 > num_edges*(7/10):
-            print("Estimated sparsity exceeded 70%")
-            return X, Y, ff, k1
         # print("k1:",k1)
         X_, Y_, ff_ = separate_dataset_multiple_inits(measured, k0, int(k1), n_init=n_init, lam=lam, mu=mu, eps=eps)
         # print("ff_:",ff_)
-        delta = (ff - ff_)/ff
+        delta = (ff - ff_)
         # print("delta:",delta)
-        if delta < step_size_per:
-            # print("***converged***")
-            # print("best guess is k1:", k1)
+        if delta < eps_k1:
+            print("***converged***")
+            print("best guess is k1:", k1)
             return X_, Y_, ff_, k1
+        # print(delta,">=",eps_k1)
         ff = ff_
 
 if __name__=="__main__":
