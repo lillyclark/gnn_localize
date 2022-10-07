@@ -97,13 +97,13 @@ def experiment1():
     num_epochs = 200
 
     # NOVEL PARAMS
-    n_neighbors = 15
+    n_neighbors = 15 #15
     k0 = 4
     lam = 1/(num_nodes**0.5)*1.1
     mu = 1/(num_nodes**0.5)*1.1
     eps = 0.001
     n_init = 1
-    k1_init = num_nodes**2*(5/100)
+    k1_init = num_nodes**2*(0/100)
     step_size = 1
     eps_k1 = 40000
 
@@ -197,7 +197,7 @@ def experiment1():
         print("Results written to", filename)
 
     write_()
-    # plot_out(figname, batch, gcn_pred, "GCN (Yan et al.)", novel_pred, "Novel", indices=indices)
+    plot_out(figname, batch, gcn_pred, "GCN (Yan et al.)", novel_pred, "Novel", indices=indices)
 
 def experiment2():
     print("EXPERIMENT 2: ROBOT DATA")
@@ -648,7 +648,10 @@ def experiment5():
             anchor_locs = batch.y[batch.anchors]
             noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
             start = time.time()
-            X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, eps_k1=eps_k1, plot=False)
+            # X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, eps_k1=eps_k1, plot=False)
+            print("to debug, assume k1 known")
+            k1 = p_nLOS*(num_nodes**2)
+            X, Y, ff = separate_dataset_multiple_inits(noisy_distance_matrix, k0, k1, n_init=n_init, lam=lam, mu=mu, eps=eps)
             novel_pred, indices = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True, anchors_as_neighbors=False, return_indices=True)
             novel_solve_time = time.time()-start
             start = time.time()
@@ -683,8 +686,8 @@ if __name__ == "__main__":
     # _, _, _ = fake_dataset(500, 50, threshold=1.2, p_nLOS=10)
     # _, _, _ = their_dataset(500, 50, threshold=10000)
 
-    # experiment1()
+    experiment1()
     # experiment2()
     # experiment3()
     # experiment4()
-    experiment5()
+    # experiment5()

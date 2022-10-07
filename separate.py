@@ -105,7 +105,10 @@ def separate_dataset_find_k1(measured, k0, k1_init=0, step_size=1, n_init=1, lam
         # print("delta:",delta)
         if delta < eps_k1:
             print("***converged***")
-            print("best guess is k1:", k1)
+            print("best guess was k1:", k1)
+            # k1 += step_size
+            # print("new best guess is k1:",k1)
+            # X_, Y_, ff_ = separate_dataset_multiple_inits(measured, k0, int(k1), n_init=n_init, lam=lam, mu=mu, eps=eps)
             return X_, Y_, ff_, k1
         # print(delta,">=",eps_k1)
         ff = ff_
