@@ -84,10 +84,10 @@ def their_dataset(num_nodes, num_anchor, threshold=1.0):
         threshold = 10000
     # m = loadmat("./GNN-For-localization/Networks/8anchor_1000agent_0PercentNLOS_smallLOS.mat")
     m = loadmat("./GNN-For-localization/Networks/8anchor_1000agent_10PercentNLOS_mediumLOS.mat")
-    Range_Mat = m["Range_Mat"][:num_nodes,:num_nodes]
-    Dist_Mat = m["Dist_Mat"][:num_nodes,:num_nodes]
-    labels = m["nodes"][:num_nodes]
-    Range = Range_Mat.copy()
+    Range_Mat = m["Range_Mat"][108:num_nodes+108,108:num_nodes+108]
+    Dist_Mat = m["Dist_Mat"][108:num_nodes+108,108:num_nodes+108]
+    labels = m["nodes"][108:num_nodes+108]
+    Range = Dist_Mat.copy()
     Range[Range > threshold] = 0
     Range_tem = Range.copy()
     Range_tem[Range_tem > 0] = 1
@@ -119,6 +119,31 @@ def their_dataset(num_nodes, num_anchor, threshold=1.0):
     features = sparse_mx_to_torch_sparse_tensor(features)
     true_locs = torch.FloatTensor(labels)
     normalized_adjacency_matrix = sparse_mx_to_torch_sparse_tensor(adj)
+
+    # plt.scatter(true_locs[:,0][:8], true_locs[:,1][:8])
+    # plt.show()
+    #
+    # plt.scatter(true_locs[:,0][:num_anchor], true_locs[:,1][:num_anchor])
+    # plt.scatter(true_locs[:,0][num_anchor:], true_locs[:,1][num_anchor:])
+    # plt.show()
+
+    # true_dist = matrix_from_locs(true_locs)
+    # err = Range - Dist_Mat
+    # print("true dist")
+    # print(true_dist)
+    # print("observed dist")
+    # print(Range)
+    # print("noise")
+    # print(err)
+    # plt.hist(err.flatten())
+    # plt.show()
+
+    # plt.hist(features.numpy().flatten())
+    # plt.title("Features hist: their data")
+    # plt.show()
+    # plt.hist(normalized_adjacency_matrix.numpy().flatten())
+    # plt.title("Norm Adj hist: their data")
+    # plt.show()
 
     anchor_mask = torch.zeros(num_nodes).bool()
     node_mask = torch.zeros(num_nodes).bool()
@@ -157,14 +182,23 @@ def separable_dataset(num_nodes, num_anchors):
 def fake_dataset(num_nodes, num_anchors, threshold=1.0, p_nLOS=10, noise_floor_dist=None):
     # nodes is total nodes, including anchors
     true_locs = torch.rand((num_nodes,2))*5
+    # plt.scatter(true_locs[:,0][:num_anchors], true_locs[:,1][:num_anchors])
+    # plt.scatter(true_locs[:,0][num_anchors:], true_locs[:,1][num_anchors:])
+    # plt.show()
     distance_matrix = torch.zeros((num_nodes, num_nodes))
     for i in range(num_nodes):
         for j in range(num_nodes):
             d = pdist(true_locs[i].unsqueeze(0), true_locs[j].unsqueeze(0))
             distance_matrix[i][j] = d
 
-    print("noise var = 0.04")
-    noise = torch.randn((num_nodes,num_nodes))*(0.04**0.5)
+    print("noise var = 0.1")
+    # noise = np.random.normal(loc=0.0,scale=0.1**0.5,size=(num_nodes,num_nodes))
+    noise = np.random.normal(loc=0.0,scale=0.1,size=(num_nodes,num_nodes))
+    # noise = np.random.normal(loc=0.0,scale=0.0**0.5,size=(num_nodes,num_nodes))
+    noise = torch.Tensor(noise)
+    # noise = torch.randn((num_nodes,num_nodes))*(0.1**0.5)
+    print("noise standard dev")
+    print(torch.std(noise))
     noise.fill_diagonal_(0)
 
     p_nLOS = p_nLOS/100
@@ -176,8 +210,14 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0, p_nLOS=10, noise_floor_d
     nLOS_noise = torch.rand((num_nodes,num_nodes))*10
     print("how many nLOS measurements?")
     print(np.count_nonzero(nLOS.numpy()))
+    print(np.count_nonzero(nLOS.numpy())/(num_nodes**2-num_nodes))
 
     noisy_distance_matrix = distance_matrix + noise + (nLOS*nLOS_noise)
+
+    # true_dist = distance_matrix
+    # err = noisy_distance_matrix - true_dist.numpy()
+    # plt.hist(err.flatten())
+    # plt.show()
 
     if noise_floor_dist:
         print("distances over", noise_floor_dist, "are measured as", np.ceil(5*2**0.5))
@@ -188,8 +228,27 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0, p_nLOS=10, noise_floor_d
     thresholded_noisy_distance_matrix  = noisy_distance_matrix.clone()
     thresholded_noisy_distance_matrix[thresholded_noisy_distance_matrix>threshold] = 0.0
 
-    features = normalize_tensor(thresholded_noisy_distance_matrix)
-    normalized_adjacency_matrix = normalize_tensor(adjacency_matrix)
+    def normalize(mx):
+        """Row-normalize sparse matrix"""
+        rowsum = np.array(mx.sum(1))
+        r_inv = np.power(rowsum, -1).flatten()
+        r_inv[np.isinf(r_inv)] = 0.
+        r_mat_inv = sp.diags(r_inv)
+        mx = r_mat_inv.dot(mx)
+        return torch.Tensor(mx)
+
+    features = normalize(thresholded_noisy_distance_matrix)
+    normalized_adjacency_matrix = normalize(adjacency_matrix)
+
+    # features = normalize_tensor(thresholded_noisy_distance_matrix)
+    # normalized_adjacency_matrix = normalize_tensor(adjacency_matrix)
+
+    # plt.hist(features.numpy().flatten())
+    # plt.title("Features hist: fake data")
+    # plt.show()
+    # plt.hist(normalized_adjacency_matrix.numpy().flatten())
+    # plt.title("Norm Adj hist: fake data")
+    # plt.show()
 
     anchor_mask = torch.zeros(num_nodes).bool()
     node_mask = torch.zeros(num_nodes).bool()

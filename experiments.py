@@ -53,25 +53,27 @@ def plot_out(figname, batch, left_pred, left_title, right_pred, right_title, ind
     handles, labels = right.get_legend_handles_labels()
     fig.legend(handles, labels, loc='lower center', ncol=4)
 
-    # visualize adjacency matrix
-    num_nodes = len(batch.y)
-    a = left
-    pred = left_pred
-    for i in range(num_nodes):
-        for j in range(num_nodes):
-            if i != j:
-                if batch.adj[i][j]:
+    if False:
+
+        # visualize adjacency matrix
+        num_nodes = len(batch.y)
+        a = left
+        pred = left_pred
+        for i in range(num_nodes):
+            for j in range(num_nodes):
+                if i != j:
+                    if batch.adj[i][j]:
+                        a.plot([batch.y[i,0],batch.y[j,0]], [batch.y[i,1],batch.y[j,1]], color="orange", alpha=0.2)
+                        a.plot([pred[i,0],pred[j,0]], [pred[i,1],pred[j,1]], color="blue", alpha=0.2)
+
+        # visualize neighbors
+        if indices is not None:
+            a = right
+            pred = right_pred
+            for i in range(num_nodes):
+                for j in indices[i]:
                     a.plot([batch.y[i,0],batch.y[j,0]], [batch.y[i,1],batch.y[j,1]], color="orange", alpha=0.2)
                     a.plot([pred[i,0],pred[j,0]], [pred[i,1],pred[j,1]], color="blue", alpha=0.2)
-
-    # visualize neighbors
-    if indices is not None:
-        a = right
-        pred = right_pred
-        for i in range(num_nodes):
-            for j in indices[i]:
-                a.plot([batch.y[i,0],batch.y[j,0]], [batch.y[i,1],batch.y[j,1]], color="orange", alpha=0.2)
-                a.plot([pred[i,0],pred[j,0]], [pred[i,1],pred[j,1]], color="blue", alpha=0.2)
 
     fig.tight_layout()
     fig.savefig(figname)
@@ -95,7 +97,7 @@ def experiment1():
     num_epochs = 200
 
     # NOVEL PARAMS
-    n_neighbors = 25
+    n_neighbors = 15
     k0 = 4
     lam = 1/(num_nodes**0.5)*1.1
     mu = 1/(num_nodes**0.5)*1.1
@@ -103,6 +105,7 @@ def experiment1():
     n_init = 1
     k1_init = num_nodes**2*(5/100)
     step_size = 1
+    eps_k1 = 40000
 
     start = time.time()
     data_loader, num_nodes, noisy_distance_matrix = their_dataset(num_nodes, num_anchors, threshold=threshold)
@@ -116,12 +119,14 @@ def experiment1():
     gcn_total_time = gcn_train_time + gcn_predict_time
     print("...done")
 
+    print("GCN ERROR:",gcn_error)
+
     print("novel...")
     for batch in data_loader:
         anchor_locs = batch.y[batch.anchors]
         noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
         start = time.time()
-        X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, plot=False)
+        X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, eps_k1=eps_k1, plot=False)
         novel_pred, indices = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True, anchors_as_neighbors=False, return_indices=True)
         novel_solve_time = time.time()-start
         start = time.time()
@@ -175,6 +180,7 @@ def experiment1():
         file_handle.write("n_init: " +str(n_init) + '\n')
         file_handle.write("k1_init: " +str(k1_init) + '\n')
         file_handle.write("step_size: " +str(step_size) + '\n')
+        file_handle.write("eps_k1: " +str(eps_k1) + '\n')
 
         file_handle.write("RESULTS OF EXPERIMENT 1" + '\n')
         file_handle.write("GCN RMSE: " + str(np.round(gcn_error,3)) + '\n')
@@ -190,7 +196,7 @@ def experiment1():
         file_handle.close()
         print("Results written to", filename)
 
-    # write_()
+    write_()
     # plot_out(figname, batch, gcn_pred, "GCN (Yan et al.)", novel_pred, "Novel", indices=indices)
 
 def experiment2():
@@ -557,7 +563,7 @@ def experiment5():
 
     # DATA PARAMS
     percent_nLOS_list = [0,10,20,30,40,50]
-    # percent_nLOS_list = [0,10]
+    # percent_nLOS_list = [0]
 
     # GCN PARAMS
     threshold = 1.2
@@ -673,6 +679,9 @@ if __name__ == "__main__":
     seed_ = 0
     np.random.seed(seed_)
     torch.manual_seed(seed_)
+
+    # _, _, _ = fake_dataset(500, 50, threshold=1.2, p_nLOS=10)
+    # _, _, _ = their_dataset(500, 50, threshold=10000)
 
     # experiment1()
     # experiment2()
