@@ -3,4 +3,6 @@ datasets/
 models/
 notebooks/
 wandb/
+results/
+old/
 GNN-For-localization

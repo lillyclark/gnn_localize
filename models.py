@@ -5,19 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
-class GAT(nn.Module):
-    def __init__(self, nfeat, nhid, nout, dropout):
-        super(GAT, self).__init__()
-        self.gc1 = GraphAttentionLayer(nfeat, nhid, dropout=dropout, alpha=0.2)
-        self.gc2 = GraphAttentionLayer(nhid, nout, dropout=dropout, alpha=0.2)
-        self.dropout = dropout
-
-    def forward(self, x, adj):
-        x = F.relu(self.gc1(x, adj))
-        # x = F.dropout(x, self.dropout, training=self.training)
-        x = self.gc2(x, adj)
-        return x
-
 class GCN(nn.Module):
     def __init__(self, nfeat, nhid, nout, dropout):
         super(GCN, self).__init__()
@@ -55,15 +42,6 @@ class gfNN(nn.Module):
         x = self.linear2(x)
         return x
 
-class rotator(nn.Module):
-    def __init__(self, nfeat):
-        super(rotator, self).__init__()
-        self.linear = nn.Linear(nfeat, nfeat)
-
-    def forward(self, x):
-        x = self.linear(x)
-        return x
-
 class simple(nn.Module):
     def __init__(self, nfeat, nhid, nout, dropout):
         super().__init__()
@@ -92,4 +70,18 @@ class MLP(torch.nn.Module):
         x = self.linear2(x)
         x = F.dropout(x, self.dropout, training=self.training)
         x = self.linear3(x)
+        return x
+
+
+class GAT(nn.Module):
+    def __init__(self, nfeat, nhid, nout, dropout):
+        super(GAT, self).__init__()
+        self.gc1 = GraphAttentionLayer(nfeat, nhid, dropout=dropout, alpha=0.2)
+        self.gc2 = GraphAttentionLayer(nhid, nout, dropout=dropout, alpha=0.2)
+        self.dropout = dropout
+
+    def forward(self, x, adj):
+        x = F.relu(self.gc1(x, adj))
+        # x = F.dropout(x, self.dropout, training=self.training)
+        x = self.gc2(x, adj)
         return x

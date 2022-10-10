@@ -97,13 +97,13 @@ def experiment1():
     num_epochs = 200
 
     # NOVEL PARAMS
-    n_neighbors = 15 #15
+    n_neighbors = 35
     k0 = 4
     lam = 1/(num_nodes**0.5)*1.1
     mu = 1/(num_nodes**0.5)*1.1
     eps = 0.001
     n_init = 1
-    k1_init = num_nodes**2*(0/100)
+    k1_init = num_nodes**2*(5/100)
     step_size = 1
     eps_k1 = 40000
 
