@@ -95,7 +95,7 @@ def their_dataset(num_nodes, num_anchor, threshold=1.0):
     data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
     return DataLoader([data]), num_nodes, Range_Mat
 
-def fake_dataset(num_nodes, num_anchors, threshold=1.0, p_nLOS=10, noise_floor_dist=None):
+def fake_dataset(num_nodes, num_anchors, threshold=1.0, p_nLOS=10, std=0.1, nLOS_max=10, noise_floor_dist=None):
     # nodes is total nodes, including anchors
     true_locs = torch.rand((num_nodes,2))*5
     distance_matrix = torch.zeros((num_nodes, num_nodes))
@@ -104,33 +104,19 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0, p_nLOS=10, noise_floor_d
             d = pdist(true_locs[i].unsqueeze(0), true_locs[j].unsqueeze(0))
             distance_matrix[i][j] = d
 
-    print("noise var = 0.1")
-    # noise = np.random.normal(loc=0.0,scale=0.1**0.5,size=(num_nodes,num_nodes))
-    noise = np.random.normal(loc=0.0,scale=0.1,size=(num_nodes,num_nodes))
-    # noise = np.random.normal(loc=0.0,scale=0.0**0.5,size=(num_nodes,num_nodes))
+    noise = np.random.normal(loc=0.0,scale=std,size=(num_nodes,num_nodes))
     noise = torch.Tensor(noise)
-    # noise = torch.randn((num_nodes,num_nodes))*(0.1**0.5)
-    print("noise standard dev")
-    print(torch.std(noise))
     noise.fill_diagonal_(0)
 
     p_nLOS = p_nLOS/100
-    print("prob of nLOS is",p_nLOS)
     nLOS = np.random.choice([0, 1], size=(num_nodes,num_nodes), p=[1-p_nLOS, p_nLOS])
     nLOS = torch.Tensor(nLOS)
     nLOS.fill_diagonal_(0)
-    print("nLOS noise is U[0,10]")
-    nLOS_noise = torch.rand((num_nodes,num_nodes))*10
-    print("how many nLOS measurements?")
-    print(np.count_nonzero(nLOS.numpy()))
-    print(np.count_nonzero(nLOS.numpy())/(num_nodes**2-num_nodes))
 
+    nLOS_noise = torch.rand((num_nodes,num_nodes))*nLOS_max
+
+    true_k1 = np.count_nonzero(nLOS.numpy())
     noisy_distance_matrix = distance_matrix + noise + (nLOS*nLOS_noise)
-
-    # true_dist = distance_matrix
-    # err = noisy_distance_matrix - true_dist.numpy()
-    # plt.hist(err.flatten())
-    # plt.show()
 
     if noise_floor_dist:
         print("distances over", noise_floor_dist, "are measured as", np.ceil(5*2**0.5))
@@ -162,11 +148,8 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0, p_nLOS=10, noise_floor_d
         anchor_mask[a] = True
     for n in range(num_anchors,num_nodes):
         node_mask[n] = True
-    # edge_index, edge_attr = torch_geometric.utils.dense_to_sparse(normalized_adjacency_matrix)
-    # data = Data(x=features.to_sparse(), edge_index=edge_index, edge_attr=edge_attr, y=true_locs, anchors=anchor_mask, nodes=node_mask)
     data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
-    return DataLoader([data]), num_nodes, noisy_distance_matrix
-    # return DataLoader([data]), num_nodes, noise_floor_distance_matrix
+    return DataLoader([data]), num_nodes, noisy_distance_matrix, true_k1
 
 def is_anchor(str_name):
     if str_name == 'scom-base1':
@@ -332,6 +315,7 @@ def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kr
     features = noisy_distance_matrix.clone()
     adjacency_matrix = features < threshold
     features[features > threshold]=0
+    print("TODO: ROW NORMALIZE INSTEAD")
     features = normalize_tensor(features)
     normalized_adjacency_matrix = normalize_tensor(adjacency_matrix.float())
     data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
@@ -408,6 +392,7 @@ def load_cellphone_data(num_anchors=3, threshold=10.0):
     features = noisy_distance_matrix.clone()
     adjacency_matrix = features < threshold
     features[features > threshold]=0
+    print("TODO: ROW NORMALIZE INSTEAD")
     features = normalize_tensor(features)
     normalized_adjacency_matrix = normalize_tensor(adjacency_matrix.float())
     data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
@@ -416,6 +401,4 @@ def load_cellphone_data(num_anchors=3, threshold=10.0):
 
 if __name__=="__main__":
     print("executing process_dataset.py")
-    # load_a_moment(eta=4.57435973, Kref=13.111276899657597)
-    # pick_a_moment()
-    load_cellphone_data()
+    data_loader, num_nodes, noisy_distance_matrix, true_k1 = fake_dataset(500, 50, threshold=1.2, p_nLOS=10)
