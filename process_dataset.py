@@ -63,7 +63,7 @@ def their_dataset(num_nodes, num_anchor, threshold=1.0):
 
     def normalize(mx):
         """Row-normalize sparse matrix"""
-        rowsum = np.array(mx.sum(1))
+        rowsum = np.array(mx.sum(1))+1e-9
         r_inv = np.power(rowsum, -1).flatten()
         r_inv[np.isinf(r_inv)] = 0.
         r_mat_inv = sp.diags(r_inv)
@@ -99,24 +99,35 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0, p_nLOS=10, std=0.1, nLOS
     # nodes is total nodes, including anchors
     true_locs = torch.rand((num_nodes,2))*5
     distance_matrix = torch.zeros((num_nodes, num_nodes))
+    nLOS_noise = torch.zeros((num_nodes, num_nodes))
+    p_nLOS = p_nLOS/100
+
     for i in range(num_nodes):
         for j in range(num_nodes):
-            d = pdist(true_locs[i].unsqueeze(0), true_locs[j].unsqueeze(0))
-            distance_matrix[i][j] = d
+            if i < j:
+                d = pdist(true_locs[i].unsqueeze(0), true_locs[j].unsqueeze(0))
+                distance_matrix[i][j] = d
+                distance_matrix[j][i] = d
+
+                if np.random.random() < p_nLOS:
+                    uniform_noise = torch.rand(())*nLOS_max
+                    nLOS_noise[i][j] = uniform_noise
+                    nLOS_noise[j][i] = uniform_noise
 
     noise = np.random.normal(loc=0.0,scale=std,size=(num_nodes,num_nodes))
     noise = torch.Tensor(noise)
     noise.fill_diagonal_(0)
 
-    p_nLOS = p_nLOS/100
-    nLOS = np.random.choice([0, 1], size=(num_nodes,num_nodes), p=[1-p_nLOS, p_nLOS])
-    nLOS = torch.Tensor(nLOS)
-    nLOS.fill_diagonal_(0)
+    # p_nLOS = p_nLOS/100
+    # nLOS = np.random.choice([0, 1], size=(num_nodes,num_nodes), p=[1-p_nLOS, p_nLOS])
+    # nLOS = torch.Tensor(nLOS)
+    # nLOS.fill_diagonal_(0)
+    # nLOS_noise = torch.rand((num_nodes,num_nodes))*nLOS_max
 
-    nLOS_noise = torch.rand((num_nodes,num_nodes))*nLOS_max
+    true_k1 = np.count_nonzero(nLOS_noise.numpy())
+    print(true_k1/(num_nodes*(num_nodes-1)))
 
-    true_k1 = np.count_nonzero(nLOS.numpy())
-    noisy_distance_matrix = distance_matrix + noise + (nLOS*nLOS_noise)
+    noisy_distance_matrix = distance_matrix + noise + nLOS_noise
 
     if noise_floor_dist:
         print("distances over", noise_floor_dist, "are measured as", np.ceil(5*2**0.5))
@@ -129,7 +140,7 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0, p_nLOS=10, std=0.1, nLOS
 
     def normalize(mx):
         """Row-normalize sparse matrix"""
-        rowsum = np.array(mx.sum(1))
+        rowsum = np.array(mx.sum(1))+1e-9
         r_inv = np.power(rowsum, -1).flatten()
         r_inv[np.isinf(r_inv)] = 0.
         r_mat_inv = sp.diags(r_inv)
