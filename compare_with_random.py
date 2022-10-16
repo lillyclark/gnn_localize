@@ -19,8 +19,8 @@ if __name__ == "__main__":
     torch.manual_seed(seed_)
 
     print("EXPERIMENT: their dataset")
-    filename = "compare_with_gcn.txt"
-    figname = "compare_with_gcn.jpg"
+    filename = "compare_with_random.txt"
+    figname = "compare_with_random.jpg"
     num_nodes = 500
     num_anchors = 50
     loss_fn = torch.nn.MSELoss()
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     num_epochs = 200
 
     # NOVEL PARAMS
-    n_neighbors = 25
+    n_neighbors = 50#25
     k0 = 4
     lam = 0.01 #1/(num_nodes**0.5)*1.1
     mu = 0.1 #1/(num_nodes**0.5)*1.1
@@ -73,6 +73,22 @@ if __name__ == "__main__":
 
     print("NOVEL ERROR:", novel_error)
 
+    print("Random...")
+    start = time.time()
+    random_pred = torch.rand((num_nodes-num_anchors,2))*5
+    random_pred_sort, _ = torch.sort(random_pred,dim=1)
+    random_pred_sort, _ = torch.sort(random_pred_sort,dim=0)
+
+    true_locs = batch.y[batch.nodes]
+    true_locs_sort, _ = torch.sort(true_locs,dim=1)
+    true_locs_sort, _ = torch.sort(true_locs_sort,dim=0)
+    random_solve_time = time.time()-start
+
+    random_error = loss_fn(random_pred_sort, true_locs_sort)
+    random_error = torch.sqrt(random_error).item()
+
+    print("RANDOM ERROR:", random_error)
+
     def write_():
         nowTime = datetime.datetime.now().strftime('%Y-%m-%d-%H_%M_%S')  # Get the Now time
         file_handle = open(filename, mode='a')
@@ -104,11 +120,46 @@ if __name__ == "__main__":
         file_handle.write("GCN train time:" + str(np.round(gcn_train_time,3)) + '\n')
         file_handle.write("GCN predict time:" + str(np.round(gcn_predict_time,3)) + '\n')
         file_handle.write("GCN total time:" + str(np.round(gcn_total_time,3)) + '\n')
+
         file_handle.write("Novel RMSE: " + str(np.round(novel_error,3)) + '\n')
         file_handle.write("Novel k1 estimate: " + str(k1) + '\n')
         file_handle.write("Novel total time:" + str(np.round(novel_solve_time,3)) + '\n')
+
+        file_handle.write("Random RMSE: " + str(np.round(random_error,3)) + '\n')
+        file_handle.write("Random total time:" + str(np.round(random_solve_time,3)) + '\n')
+
         file_handle.close()
         print("Results written to", filename)
 
     write_()
-    plot_out(figname, batch, gcn_pred, "GCN (Yan et al.)", novel_pred, "SMILE", indices=indices)
+
+    def plot_out(figname, batch, left_pred, left_title, middle_pred, middle_title, right_pred, right_title, indices=None):
+        left_actual = batch.y
+        right_actual = batch.y
+        middle_actual = batch.y
+        num_anchors = torch.sum(batch.anchors)
+        fig, (left, middle, right) = plt.subplots(1,3,figsize=(12,4), sharex=True, sharey=True)
+        left.scatter(left_pred[:num_anchors,0].detach().numpy(), left_pred[:num_anchors,1].detach().numpy(), label="pred anchor", marker="+",color="blue")
+        left.scatter(left_actual[:num_anchors,0].detach().numpy(), left_actual[:num_anchors,1].detach().numpy(), label="true anchor", marker="x",color="orange")
+        left.scatter(left_pred[num_anchors:,0].detach().numpy(), left_pred[num_anchors:,1].detach().numpy(), label="pred node",color="blue")
+        left.scatter(left_actual[num_anchors:,0].detach().numpy(), left_actual[num_anchors:,1].detach().numpy(), label="true node",color="orange")
+        left.set_title(left_title)
+
+        middle.scatter(middle_pred[:num_anchors,0].detach().numpy(), middle_pred[:num_anchors,1].detach().numpy(), label="pred anchor", marker="+",color="blue")
+        middle.scatter(middle_actual[:num_anchors,0].detach().numpy(), middle_actual[:num_anchors,1].detach().numpy(), label="true anchor", marker="x",color="orange")
+        middle.scatter(middle_pred[num_anchors:,0].detach().numpy(), middle_pred[num_anchors:,1].detach().numpy(), label="pred node",color="blue")
+        middle.scatter(middle_actual[num_anchors:,0].detach().numpy(), middle_actual[num_anchors:,1].detach().numpy(), label="true node",color="orange")
+        middle.set_title(middle_title)
+
+        right.scatter(right_pred[:num_anchors,0].detach().numpy(), right_pred[:num_anchors,1].detach().numpy(), label="pred anchor", marker="+",color="blue")
+        right.scatter(right_actual[:num_anchors,0].detach().numpy(), right_actual[:num_anchors,1].detach().numpy(), label="true anchor", marker="x",color="orange")
+        right.scatter(right_pred[num_anchors:,0].detach().numpy(), right_pred[num_anchors:,1].detach().numpy(), label="pred node",color="blue")
+        right.scatter(right_actual[num_anchors:,0].detach().numpy(), right_actual[num_anchors:,1].detach().numpy(), label="true node",color="orange")
+        right.set_title(right_title)
+        handles, labels = right.get_legend_handles_labels()
+        fig.legend(handles, labels, loc='lower center', ncol=4)
+        fig.tight_layout()
+        fig.savefig(figname)
+        print("Plot saved to",figname)
+
+    plot_out(figname, batch, gcn_pred, "GCN (Yan et al.)", novel_pred, "SMILE", random_pred, "Random", indices=indices)

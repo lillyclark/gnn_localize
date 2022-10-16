@@ -125,14 +125,17 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0, p_nLOS=10, std=0.1, nLOS
     # nLOS_noise = torch.rand((num_nodes,num_nodes))*nLOS_max
 
     true_k1 = np.count_nonzero(nLOS_noise.numpy())
-    print(true_k1/(num_nodes*(num_nodes-1)))
+    # print(true_k1/(num_nodes*(num_nodes-1)))
 
     noisy_distance_matrix = distance_matrix + noise + nLOS_noise
 
     if noise_floor_dist:
         print("distances over", noise_floor_dist, "are measured as", np.ceil(5*2**0.5))
         # turn distances above a threshold into noise floor distances
+        extra_k1 = np.count_nonzero(noisy_distance_matrix>noise_floor_dist)
         noisy_distance_matrix[noisy_distance_matrix>noise_floor_dist] = np.ceil(5*2**0.5)
+        print("original k1:", true_k1, "new k1:", true_k1+extra_k1)
+        true_k1 += extra_k1
 
     adjacency_matrix = (noisy_distance_matrix<threshold).float()
     thresholded_noisy_distance_matrix  = noisy_distance_matrix.clone()
