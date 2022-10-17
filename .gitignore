@@ -6,3 +6,5 @@ wandb/
 results/
 old/
 GNN-For-localization
+*.txt
+*.jpg

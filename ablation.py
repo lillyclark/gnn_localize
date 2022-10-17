@@ -66,6 +66,7 @@ if __name__ == "__main__":
 
         print("Reduce rank + Decomposition")
         rank_reduced = denoise_via_SVD(noisy_distance_matrix**2, k=4, fill_diag=False, take_sqrt=False)
+        # rank_reduced = (rank_reduced+rank_reduced.T)/2
         rank_reduced_decomposition = solve_direct(rank_reduced, anchor_locs, mode="Kabsch", dont_square=True)
         rank_reduced_decomposition_error = torch.sqrt(loss_fn(rank_reduced_decomposition[batch.nodes], batch.y[batch.nodes])).item()
 
@@ -73,6 +74,7 @@ if __name__ == "__main__":
         # X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix**2, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, eps_k1=eps_k1, plot=False)
         k1 = 25000
         X, Y, ff = separate_dataset(noisy_distance_matrix, k0, k1, lam=lam, mu=mu, eps=eps)
+        # X = (X+X.T)/2
         x_decomposition = solve_direct(X, anchor_locs, mode="Kabsch", dont_square=True)
         x_decomposition_error = torch.sqrt(loss_fn(x_decomposition[batch.nodes], batch.y[batch.nodes])).item()
 
