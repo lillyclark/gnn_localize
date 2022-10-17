@@ -58,8 +58,10 @@ def their_dataset(num_nodes, num_anchor, threshold=1.0):
     Range_tem = Range.copy()
     Range_tem[Range_tem > 0] = 1
 
-    features = sp.csr_matrix(Range, dtype=np.float64)
-    Adj = sp.csr_matrix(Range_tem, dtype=np.float64)
+    # features = sp.csr_matrix(Range, dtype=np.float64)
+    # Adj = sp.csr_matrix(Range_tem, dtype=np.float64)
+    features = Range
+    Adj = Range_tem
 
     def normalize(mx):
         """Row-normalize sparse matrix"""
@@ -70,8 +72,11 @@ def their_dataset(num_nodes, num_anchor, threshold=1.0):
         mx = r_mat_inv.dot(mx)
         return mx
 
+    # features = normalize(features)
+    # adj = normalize(Adj + sp.eye(Adj.shape[0]))
     features = normalize(features)
-    adj = normalize(Adj + sp.eye(Adj.shape[0]))
+    adj = normalize(Adj + np.eye(Adj.shape[0]))
+
 
     def sparse_mx_to_torch_sparse_tensor(sparse_mx):
         """Convert a scipy sparse matrix to a torch sparse tensor."""
@@ -82,9 +87,12 @@ def their_dataset(num_nodes, num_anchor, threshold=1.0):
         shape = torch.Size(sparse_mx.shape)
         return torch.sparse.FloatTensor(indices, values, shape)
 
-    features = sparse_mx_to_torch_sparse_tensor(features)
+    # features = sparse_mx_to_torch_sparse_tensor(features)
+    # true_locs = torch.FloatTensor(labels)
+    # normalized_adjacency_matrix = sparse_mx_to_torch_sparse_tensor(adj)
+    features = torch.Tensor(features)
     true_locs = torch.FloatTensor(labels)
-    normalized_adjacency_matrix = sparse_mx_to_torch_sparse_tensor(adj)
+    normalized_adjacency_matrix = torch.Tensor(adj)
 
     anchor_mask = torch.zeros(num_nodes).bool()
     node_mask = torch.zeros(num_nodes).bool()

@@ -55,7 +55,7 @@ if __name__ == "__main__":
     gcn_train_time = train_GCN(model, optimizer, loss_fn, data_loader, num_epochs)
     gcn_pred, gcn_error, gcn_predict_time = test_GCN(model, loss_fn, data_loader)
     gcn_total_time = gcn_train_time + gcn_predict_time
-    print("...done")
+    print(f"...done in {gcn_total_time} secs")
 
     print("GCN ERROR:",gcn_error)
 
@@ -69,7 +69,7 @@ if __name__ == "__main__":
         novel_solve_time = time.time()-start
         novel_error = loss_fn(novel_pred[batch.nodes], batch.y[batch.nodes])
         novel_error = torch.sqrt(novel_error).item()
-    print("...done")
+    print(f"...done in {novel_solve_time} secs")
 
     print("NOVEL ERROR:", novel_error)
 
