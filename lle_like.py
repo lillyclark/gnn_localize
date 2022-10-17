@@ -63,15 +63,24 @@ def barycenter_weights(distance_matrix, indices, reg=1e-5, dont_square=False):
     B = np.empty((n_samples, n_neighbors))
     v = np.ones(n_neighbors)
     D = distance_matrix.numpy()
-    perfect = True
+
+    if not dont_square:
+        D = D**2
+
     for i, ind in enumerate(indices):
-        C = np.empty((n_neighbors, n_neighbors))
-        for j in range(n_neighbors):
-            for k in range(n_neighbors):
-                if dont_square:
-                    C[j][k] = (D[i][ind[k]] + D[ind[j]][i] - D[ind[j]][ind[k]])/2
-                else:
-                    C[j][k] = (D[i][ind[k]]**2 + D[ind[j]][i]**2 - D[ind[j]][ind[k]]**2)/2
+        row = D[i,ind]
+        m1 = np.outer(np.ones(n_neighbors), row)
+        col = D[ind,i]
+        m2 = np.outer(col, np.ones(n_neighbors))
+        C = (m1+m2-D[ind][:,ind])/2
+        # print(C)
+
+        # C = np.empty((n_neighbors, n_neighbors))
+        # for j in range(n_neighbors):
+        #     for k in range(n_neighbors):
+        #         C[j][k] = (D[i][ind[k]] + D[ind[j]][i] - D[ind[j]][ind[k]])/2
+        # print(C)
+
         trace = np.trace(C)
         if trace > 0:
             R = reg * trace
@@ -85,10 +94,6 @@ def barycenter_weights(distance_matrix, indices, reg=1e-5, dont_square=False):
             perfect = False
             w, res, rnk, s = lstsq(C, v)
         B[i, :] = w / np.sum(w)
-    # if perfect:
-    #     print("able to recover weights exactly")
-    # else:
-    #     print("using least squares to recover weights")
     return B
 
 def weight_to_mat(weights, indices):
@@ -198,3 +203,25 @@ def solve_iteratively(num_nodes,num_anchors,n_neighbors,anchor_locs,noisy_distan
     # print(f"{time.time()-start} to find locs")
     pred = np.vstack((anchor_locs,node_locs))
     return torch.Tensor(pred)
+
+if __name__=="__main__":
+    seed_ = 0
+    np.random.seed(seed_)
+    torch.manual_seed(seed_)
+
+    # weights = torch.rand((20,5))
+    # indices = torch.choice(np.arange(20),(20,5))
+    # m = weight_to_mat(weights, indices)
+
+    num_nodes = 500
+    n_neighbors = 50
+    distance_matrix = torch.rand((num_nodes, num_nodes))*5
+    distance_matrix = (distance_matrix + distance_matrix.T)/2
+    distance_matrix.fill_diagonal_(0)
+    distance_matrix = torch.round(distance_matrix)
+    indices = neighbors(distance_matrix, n_neighbors)
+    start = time.time()
+    for i in range(10):
+        W = barycenter_weights(distance_matrix, indices)
+    print(time.time()-start)
+    print(W)
