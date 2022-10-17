@@ -21,6 +21,7 @@ if __name__ == "__main__":
     print("EXPERIMENT: their dataset")
     filename = "compare_with_gcn.txt"
     figname = "compare_with_gcn.jpg"
+    figname2 = "compare_with_gcn_rmse.jpg"
     num_nodes = 500
     num_anchors = 50
     loss_fn = torch.nn.MSELoss()
@@ -35,7 +36,7 @@ if __name__ == "__main__":
     num_epochs = 200
 
     # NOVEL PARAMS
-    n_neighbors = 25
+    n_neighbors = 50 #25
     k0 = 4
     lam = 0.01 #1/(num_nodes**0.5)*1.1
     mu = 0.1 #1/(num_nodes**0.5)*1.1
@@ -111,4 +112,5 @@ if __name__ == "__main__":
         print("Results written to", filename)
 
     write_()
+    plot_rmse(figname2, batch.y, {"GCN":gcn_pred, "SMILE":novel_pred})
     plot_out(figname, batch, gcn_pred, "GCN (Yan et al.)", novel_pred, "SMILE", indices=indices)
