@@ -101,7 +101,7 @@ if __name__ == "__main__":
 
     ax2 = ax1.twinx()
     ax2.plot(n_neighbor_list, runtime_list, marker='o', color='orange')
-    ax2.set_ylabel('Runtime (solve + predict, sec)')
+    ax2.set_ylabel('Runtime (sec)')
     ax2.tick_params(axis='y', labelcolor='orange')
 
     plt.tight_layout()
