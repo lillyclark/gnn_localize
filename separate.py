@@ -18,9 +18,12 @@ def S_from_D(D, k1):
     return S_.reshape(D.shape)
 
 def f(D, X, Y, lam, mu):
-    A = torch.sum((D-X-Y)**2)
-    B = lam*torch.sum(X**2)
-    C = mu*torch.sum(Y**2)
+    A = torch.linalg.norm(D-X-Y, ord="fro")**2
+    # A = torch.sum((D-X-Y)**2)
+    B = lam*torch.linalg.norm(X)**2
+    # B = lam*torch.sum(X**2)
+    C = mu*torch.linalg.norm(Y)**2
+    # C = mu*torch.sum(Y**2)
     # print("f(D,X,Y)=",A+B+C)
     return A+B+C
 
@@ -73,6 +76,7 @@ def separate_dataset(measured, k0, k1, lam=0.1, mu=0.1, eps=0.001, X=None, Y=Non
         # axes[iter][1].imshow(X)
         # axes[iter][2].imshow(Y)
     # plt.show()
+    print("separate dataset didn't converge")
     return X, Y, ff
 
 def separate_dataset_multiple_inits(measured, k0, k1, n_init=10, lam=0.1, mu=0.1, eps=0.001):
@@ -112,3 +116,11 @@ def separate_dataset_find_k1(measured, k0, k1_init=0, step_size=1, n_init=1, lam
             return X_, Y_, ff_, k1
         # print(delta,">=",eps_k1)
         ff = ff_
+
+if __name__=="__main__":
+    torch.manual_seed(0)
+    D = torch.rand((100,100))*5
+    X = torch.rand((100,100))*2
+    Y = torch.rand((100,100))*3
+    res = f(D, X, Y, 0.1, 0.01)
+    print(res)
