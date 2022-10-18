@@ -58,32 +58,20 @@ def constrain_X(X):
 
 def separate_dataset(measured, k0, k1, lam=0.1, mu=0.1, eps=0.001, X=None, Y=None, constrain_low_rank=False):
     D = measured**2
-    # if check_rank(D) == k0:
-    #     print("already low rank")
-    #     return D, torch.zeros_like(D), 0
     if X is None:
         X = torch.zeros_like(D)
     if Y is None:
         Y = torch.zeros_like(D)
     fi = f(D, X, Y, lam, mu)
-    # print("fi:",fi)
-    # fig, axes = plt.subplots(10,3)
     for iter in range(100):
         Y = solve_sparse_problem(D, X, mu, k1)
         X = solve_rank_problem(D, Y, lam, k0)
         if constrain_low_rank:
             X = constrain_X(X)
         ff = f(D, X, Y, lam, mu)
-        if (fi-ff)/ff <= eps:
-            # print(iter,"ff:",ff)
-            # print("done in:", iter)
+        if (fi-ff)/fi <= eps:
             return X, Y, ff
         fi = ff
-        # axes[iter][0].imshow(D)
-        # axes[iter][1].imshow(X)
-        # axes[iter][2].imshow(Y)
-    # plt.show()
-    print("separate dataset didn't converge")
     return X, Y, ff
 
 def separate_dataset_multiple_inits(measured, k0, k1, n_init=10, lam=0.1, mu=0.1, eps=0.001, constrain_low_rank=False):
@@ -96,7 +84,6 @@ def separate_dataset_multiple_inits(measured, k0, k1, n_init=10, lam=0.1, mu=0.1
     return best_X, best_Y, best_ff
 
 def separate_dataset_find_k1(measured, k0, k1_init=0, step_size=1, n_init=1, lam=0.1, mu=0.1, eps=0.001, eps_k1=0.01, plot=False, constrain_low_rank=False):
-    """ step_size in percentage of edges """
     if check_rank(measured**2) == k0:
         print("already low rank")
         return measured**2, torch.zeros_like(measured), 0
@@ -104,29 +91,13 @@ def separate_dataset_find_k1(measured, k0, k1_init=0, step_size=1, n_init=1, lam
     num_edges = int(measured.shape[0]*measured.shape[1])
     step_size = int(num_edges*step_size/100)
     k1 = k1_init
-
-    X, Y, ff = separate_dataset_multiple_inits(measured, k0, k1, n_init=n_init, lam=lam, mu=mu, eps=eps, constrain_low_rank=constrain_low_rank)
-    if ff == 0:
-        return X, Y, ff, k1
-    # print("k1_init:",k1)
-    # print("ff_init:",ff)
-
-    while True:
+    X, Y, fi = separate_dataset_multiple_inits(measured, k0, k1, n_init=n_init, lam=lam, mu=mu, eps=eps, constrain_low_rank=constrain_low_rank)
+    for iter in range(100):
         k1 += step_size
-        # print("k1:",k1)
-        X_, Y_, ff_ = separate_dataset_multiple_inits(measured, k0, int(k1), n_init=n_init, lam=lam, mu=mu, eps=eps, constrain_low_rank=constrain_low_rank)
-        # print("ff_:",ff_)
-        delta = (ff - ff_)
-        # print("delta:",delta)
-        if delta < eps_k1:
-            # print("***converged***")
-            # print("best guess was k1:", k1)
-            # k1 += step_size
-            # print("new best guess is k1:",k1)
-            # X_, Y_, ff_ = separate_dataset_multiple_inits(measured, k0, int(k1), n_init=n_init, lam=lam, mu=mu, eps=eps)
-            return X_, Y_, ff_, k1
-        # print(delta,">=",eps_k1)
-        ff = ff_
+        X, Y, ff = separate_dataset_multiple_inits(measured, k0, int(k1), n_init=n_init, lam=lam, mu=mu, eps=eps, constrain_low_rank=constrain_low_rank)
+        if (fi-ff)/fi <= eps_k1:
+            return X, Y, ff, k1
+        fi = ff
 
 if __name__=="__main__":
     torch.manual_seed(0)
