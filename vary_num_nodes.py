@@ -22,7 +22,7 @@ if __name__ == "__main__":
     figname1 = "vary_num_nodes_compare.jpg"
     figname2 = "vary_num_nodes_runtime.jpg"
 
-    num_nodes_list = [500] #[50,100,250,500,750,1000]
+    num_nodes_list = [50,100,250,500,750,1000]
     num_anchors_percent = 10
     # set num_anchors as 10% of num nodes
     loss_fn = torch.nn.MSELoss()
@@ -107,11 +107,11 @@ if __name__ == "__main__":
         num_anchors = int(num_nodes*(num_anchors_percent/100))
         print("num_nodes:",num_nodes,"num_anchors:",num_anchors)
 
-        # data_loader, num_nodes, noisy_distance_matrix, true_k1 = fake_dataset(num_nodes, num_anchors, threshold=threshold, p_nLOS=p_nLOS, std=std, noise_floor_dist=noise_floor_dist)
-        # true_k1_list.append(true_k1)
+        data_loader, num_nodes, noisy_distance_matrix, true_k1 = fake_dataset(num_nodes, num_anchors, threshold=threshold, p_nLOS=p_nLOS, std=std, noise_floor_dist=noise_floor_dist)
+        true_k1_list.append(true_k1)
 
-        data_loader, num_nodes, noisy_distance_matrix = their_dataset(num_nodes, num_anchors, threshold=threshold)
-        true_k1 = num_nodes**2*10/100 # roughly
+        # data_loader, num_nodes, noisy_distance_matrix = their_dataset(num_nodes, num_anchors, threshold=threshold)
+        # true_k1 = num_nodes**2*10/100 # roughly
 
         print("GCN....")
         model = GCN(nfeat=num_nodes, nhid=nhid, nout=nout, dropout=dropout)
@@ -151,27 +151,25 @@ if __name__ == "__main__":
     writeLine("Novel error:"+str(novel_list),True)
     writeLine("Novel runtime:"+str(novel_runtime_list),True)
 
-    if False:
+    fig1, ax1 = plt.subplots(figsize=(6,3))
+    ax1.plot(num_nodes_list, novel_list, marker='o',color='blue',label="SMILE")
+    ax1.plot(num_nodes_list, gcn_list, marker='o',color='orange',label="GCN")
+    ax1.set_xlabel(f'Number of Nodes ({num_anchors_percent}% are anchors)')
+    ax1.set_ylabel('RMSE')
+    ax1.legend()
+    fig1.tight_layout()
+    fig1.savefig(figname1)
+    print("plot saved to",figname1)
 
-        fig1, ax1 = plt.subplots(figsize=(6,3))
-        ax1.plot(num_nodes_list, novel_list, marker='o',color='blue',label="SMILE")
-        ax1.plot(num_nodes_list, gcn_list, marker='o',color='orange',label="GCN")
-        ax1.set_xlabel(f'Number of Nodes ({num_anchors_percent}% are anchors)')
-        ax1.set_ylabel('RMSE')
-        ax1.legend()
-        fig1.tight_layout()
-        fig1.savefig(figname1)
-        print("plot saved to",figname1)
-
-        fig2, ax2 = plt.subplots(figsize=(6,3))
-        ax2.plot(num_nodes_list, novel_list, marker='o',color='blue')
-        ax2.set_xlabel(f'Number of Nodes ({num_anchors_percent}% are anchors)')
-        ax2.set_ylabel('RMSE')
-        ax2.tick_params(axis='y', labelcolor='blue')
-        ax3 = ax2.twinx()
-        ax3.plot(num_nodes_list, novel_runtime_list, marker='o', color='orange')
-        ax3.set_ylabel('Runtime (sec)')
-        ax3.tick_params(axis='y', labelcolor='orange')
-        fig2.tight_layout()
-        fig2.savefig(figname2)
-        print("plot saved to",figname2)
+    fig2, ax2 = plt.subplots(figsize=(6,3))
+    ax2.plot(num_nodes_list, novel_list, marker='o',color='blue')
+    ax2.set_xlabel(f'Number of Nodes ({num_anchors_percent}% are anchors)')
+    ax2.set_ylabel('RMSE')
+    ax2.tick_params(axis='y', labelcolor='blue')
+    ax3 = ax2.twinx()
+    ax3.plot(num_nodes_list, novel_runtime_list, marker='o', color='orange')
+    ax3.set_ylabel('Runtime (sec)')
+    ax3.tick_params(axis='y', labelcolor='orange')
+    fig2.tight_layout()
+    fig2.savefig(figname2)
+    print("plot saved to",figname2)

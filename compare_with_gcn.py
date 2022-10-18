@@ -65,7 +65,7 @@ if __name__ == "__main__":
         anchor_locs = batch.y[batch.anchors]
         noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
         start = time.time()
-        X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, eps_k1=eps_k1, plot=False)
+        X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, eps_k1=eps_k1, plot=False, constrain_low_rank=False)
         novel_pred, indices = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True, anchors_as_neighbors=False, return_indices=True)
         novel_solve_time = time.time()-start
         novel_error = loss_fn(novel_pred[batch.nodes], batch.y[batch.nodes])
