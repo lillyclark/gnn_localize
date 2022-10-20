@@ -11,19 +11,55 @@ import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 
+# DATA PARAMS
+num_nodes = 500
+num_anchors = 50
+p_nLOS = 10
+std = 0.1
+noise_floor_dist = None
+
+# GCN PARAMS
+threshold = 1.2
+nhid = 2000
+nout = 2
+dropout = 0.5
+lr = 0.01
+weight_decay = 0
+num_epochs = 200
+
+# NOVEL PARAMS
+n_neighbors = 50
+k0 = 4
+lam = 0.01 #1/(num_nodes**0.5)
+mu = 0.1 #1/(num_nodes**0.5)
+eps = 0.001
+n_init = 1
+k1_init = num_nodes**2*(5/100)
+k1_init = 0
+step_size = 1
+eps_k1 = 0.01
+constrain_solution=False
+
+# COLORS
+TRUE_COLOR = 'blue'
+GCN_COLOR = 'orange'
+SMILE_COLOR = 'deeppink'
+
 def plot_rmse(figname, true_locs, to_eval):
     plot_data = []
     colors = []
     names = []
-    color_list = ["blue","orange","green","red","purple","yellow"]
+    color_dict = {"GCN":GCN_COLOR, "SMILE":SMILE_COLOR}
     fig, ax = plt.subplots(1,1,figsize=(6,3))
     for name, pred_locs in to_eval.items():
         rmse = np.linalg.norm(pred_locs.detach().numpy() - true_locs.detach().numpy(), axis=1)
         plot_data.append(rmse)
-        colors.append(color_list[len(colors)])
+        colors.append(color_dict[name])
         names.append(name)
     ax.hist(plot_data, color=colors, label=names,bins=20)
     ax.legend()
+    ax.set_xlabel('RMSE')
+    ax.set_ylabel('Frequency')
     fig.tight_layout()
     fig.savefig(figname)
 
@@ -50,24 +86,29 @@ def test_GCN(model, loss_fn, data_loader):
     return pred, loss_test, time.time()-start
 
 def plot_out(figname, batch, left_pred, left_title, right_pred, right_title, indices=None):
+    if 'GCN' not in left_title or 'SMILE' not in right_title:
+        raise ValueError()
     left_actual = batch.y
     right_actual = batch.y
     num_anchors = torch.sum(batch.anchors)
     fig, (left, right) = plt.subplots(1,2,figsize=(8,4), sharex=True, sharey=True)
-    left.scatter(left_pred[:num_anchors,0].detach().numpy(), left_pred[:num_anchors,1].detach().numpy(), label="pred anchor", marker="+",color="blue")
-    left.scatter(left_actual[:num_anchors,0].detach().numpy(), left_actual[:num_anchors,1].detach().numpy(), label="true anchor", marker="x",color="orange")
-    left.scatter(left_pred[num_anchors:,0].detach().numpy(), left_pred[num_anchors:,1].detach().numpy(), label="pred node",color="blue")
-    left.scatter(left_actual[num_anchors:,0].detach().numpy(), left_actual[num_anchors:,1].detach().numpy(), label="true node",color="orange")
+    left.scatter(left_actual[:num_anchors,0].detach().numpy(), left_actual[:num_anchors,1].detach().numpy(), label="true anchor", marker="x",color=TRUE_COLOR)
+    left.scatter(left_pred[:num_anchors,0].detach().numpy(), left_pred[:num_anchors,1].detach().numpy(), label="pred anchor", marker="+",color=GCN_COLOR)
+    left.scatter(left_actual[num_anchors:,0].detach().numpy(), left_actual[num_anchors:,1].detach().numpy(), label="true node",color=TRUE_COLOR)
+    left.scatter(left_pred[num_anchors:,0].detach().numpy(), left_pred[num_anchors:,1].detach().numpy(), label="pred node",color=GCN_COLOR)
     left.set_title(left_title)
-    # left.legend()
-    right.scatter(right_pred[:num_anchors,0].detach().numpy(), right_pred[:num_anchors,1].detach().numpy(), label="pred anchor", marker="+",color="blue")
-    right.scatter(right_actual[:num_anchors,0].detach().numpy(), right_actual[:num_anchors,1].detach().numpy(), label="true anchor", marker="x",color="orange")
-    right.scatter(right_pred[num_anchors:,0].detach().numpy(), right_pred[num_anchors:,1].detach().numpy(), label="pred node",color="blue")
-    right.scatter(right_actual[num_anchors:,0].detach().numpy(), right_actual[num_anchors:,1].detach().numpy(), label="true node",color="orange")
+    left.legend(ncol=2)
+    right.scatter(right_actual[:num_anchors,0].detach().numpy(), right_actual[:num_anchors,1].detach().numpy(), label="true anchor", marker="x",color=TRUE_COLOR)
+    right.scatter(right_pred[:num_anchors,0].detach().numpy(), right_pred[:num_anchors,1].detach().numpy(), label="pred anchor", marker="+",color=SMILE_COLOR)
+    right.scatter(right_actual[num_anchors:,0].detach().numpy(), right_actual[num_anchors:,1].detach().numpy(), label="true node",color=TRUE_COLOR)
+    right.scatter(right_pred[num_anchors:,0].detach().numpy(), right_pred[num_anchors:,1].detach().numpy(), label="pred node",color=SMILE_COLOR)
     right.set_title(right_title)
-    # right.legend()
-    handles, labels = right.get_legend_handles_labels()
-    fig.legend(handles, labels, loc='lower center', ncol=4)
+    right.legend(ncol=2)
+    # handles1, labels1 = right.get_legend_handles_labels()
+    # handles2, labels2 = left.get_legend_handles_labels()
+    # print(handles1, labels1)
+    # handles, labels = set(handles1+handles2), set(labels1+labels2)
+    # fig.legend(handles, labels, loc='lower center', ncol=4)
 
     if indices is not None:
 
@@ -79,8 +120,8 @@ def plot_out(figname, batch, left_pred, left_title, right_pred, right_title, ind
             for j in range(num_nodes):
                 if i != j:
                     if batch.adj[i][j]:
-                        a.plot([batch.y[i,0],batch.y[j,0]], [batch.y[i,1],batch.y[j,1]], color="orange", alpha=0.2)
-                        a.plot([pred[i,0],pred[j,0]], [pred[i,1],pred[j,1]], color="blue", alpha=0.2)
+                        a.plot([batch.y[i,0],batch.y[j,0]], [batch.y[i,1],batch.y[j,1]], color=TRUE_COLOR, alpha=0.2)
+                        a.plot([pred[i,0],pred[j,0]], [pred[i,1],pred[j,1]], color=GCN_COLOR, alpha=0.2)
 
         # visualize neighbors
         if indices is not None:
@@ -88,8 +129,8 @@ def plot_out(figname, batch, left_pred, left_title, right_pred, right_title, ind
             pred = right_pred
             for i in range(num_nodes):
                 for j in indices[i]:
-                    a.plot([batch.y[i,0],batch.y[j,0]], [batch.y[i,1],batch.y[j,1]], color="orange", alpha=0.2)
-                    a.plot([pred[i,0],pred[j,0]], [pred[i,1],pred[j,1]], color="blue", alpha=0.2)
+                    a.plot([batch.y[i,0],batch.y[j,0]], [batch.y[i,1],batch.y[j,1]], color=TRUE_COLOR, alpha=0.2)
+                    a.plot([pred[i,0],pred[j,0]], [pred[i,1],pred[j,1]], color=SMILE_COLOR, alpha=0.2)
 
     fig.tight_layout()
     fig.savefig(figname)
