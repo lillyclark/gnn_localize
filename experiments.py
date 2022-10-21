@@ -58,7 +58,7 @@ def plot_rmse(figname, true_locs, to_eval):
         names.append(name)
     ax.hist(plot_data, color=colors, label=names,bins=20)
     ax.legend()
-    ax.set_xlabel('RMSE')
+    ax.set_xlabel('Error')
     ax.set_ylabel('Frequency')
     fig.tight_layout()
     fig.savefig(figname)

@@ -20,21 +20,24 @@ if __name__ == "__main__":
 
     print("EXPERIMENT: vary n_neighbors")
     filename = "vary_n_neighbors.txt"
-    figname = "vary_n_neighbors.jpg"
+    figname = "vary_n_neighbors.pdf"
     num_nodes = 500
     num_anchors = 50
     loss_fn = torch.nn.MSELoss()
 
     # NOVEL PARAMS
-    n_neighbor_list = [5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100]
-    k0 = 4
-    lam = 1/(num_nodes**0.5)*1.1
-    mu = 1/(num_nodes**0.5)*1.1
-    eps = 0.001
+    # n_neighbor_list = [5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100]
+    n_neighbor_list = [6,8,10,20,30,40,50,60,70,80,90,100,110,120,130,140,150]
+    # n_neighbor_list = [3,25,50,75,100,125,150,175,200,225,250,275,300,325,350,375,400,425,450,475,499]
     n_init = 1
-    k1_init = num_nodes**2*(5/100)
-    step_size = 1
-    eps_k1 = 40000
+    # k0 = 4
+    # lam = 1/(num_nodes**0.5)*1.1
+    # mu = 1/(num_nodes**0.5)*1.1
+    # eps = 0.001
+    # n_init = 1
+    # k1_init = num_nodes**2*(5/100)
+    # step_size = 1
+    # eps_k1 = 40000
 
     data_loader, num_nodes, noisy_distance_matrix = their_dataset(num_nodes, num_anchors, threshold=10)
     print("dataset loaded...")
@@ -76,14 +79,21 @@ if __name__ == "__main__":
         for n_neighbors in n_neighbor_list:
             anchor_locs = batch.y[batch.anchors]
             noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
-            start = time.time()
-            X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, plot=False)
-            novel_pred, indices = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True, anchors_as_neighbors=False, return_indices=True)
-            novel_solve_time = time.time()-start
-            novel_error = loss_fn(novel_pred[batch.nodes], batch.y[batch.nodes])
-            novel_error = torch.sqrt(novel_error).item()
-            result_list.append(novel_error)
-            runtime_list.append(novel_solve_time)
+
+            e = []
+            r = []
+            for test in range(10):
+                start = time.time()
+                X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, plot=False)
+                novel_pred, indices = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True, anchors_as_neighbors=False, return_indices=True)
+                novel_solve_time = time.time()-start
+                novel_error = loss_fn(novel_pred[batch.nodes], batch.y[batch.nodes])
+                novel_error = torch.sqrt(novel_error).item()
+                e.append(novel_error)
+                r.append(novel_solve_time)
+
+            result_list.append(sum(e)/len(e))
+            runtime_list.append(sum(r)/len(r))
             k1_list.append(k1)
             print("neighbors:",n_neighbors,"k1:",k1,"error:",novel_error,"runtime:",novel_solve_time)
     print("...done")
@@ -94,15 +104,15 @@ if __name__ == "__main__":
 
     fig, ax1 = plt.subplots(figsize=(6,3))
 
-    ax1.plot(n_neighbor_list, result_list, marker='o',color='blue')
+    ax1.plot(n_neighbor_list, result_list, marker='o',color=SMILE_COLOR)
     ax1.set_xlabel('Number of neighbors')
     ax1.set_ylabel('RMSE')
-    ax1.tick_params(axis='y', labelcolor='blue')
+    ax1.tick_params(axis='y', labelcolor='black')
 
     ax2 = ax1.twinx()
-    ax2.plot(n_neighbor_list, runtime_list, marker='o', color='orange')
+    ax2.plot(n_neighbor_list, runtime_list, marker='X', color=SMILE_COLOR, linestyle='--')
     ax2.set_ylabel('Runtime (sec)')
-    ax2.tick_params(axis='y', labelcolor='orange')
+    ax2.tick_params(axis='y', labelcolor='black')
 
     plt.tight_layout()
     plt.savefig(figname)
