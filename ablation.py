@@ -20,35 +20,33 @@ if __name__ == "__main__":
 
     print("EXPERIMENT: ablation")
     filename = "ablation.txt"
-    figname = "ablation.jpg"
-    num_nodes = 500
-    num_anchors = 50
+    figname = "ablation.pdf"
     loss_fn = torch.nn.MSELoss()
 
     # data params
-    p_nLOS = 10
+    # p_nLOS = 10
     std = 0.3
     noise_floor_dist = 5.0
 
-    # GCN PARAMS
-    threshold = 1.2
-    nhid = 2000
-    nout = 2
-    dropout = 0.5
-    lr = 0.01
-    weight_decay = 0
-    num_epochs = 200
-
-    # NOVEL PARAMS
-    n_neighbors = 50
-    k0 = 4
-    lam = 0.01 #1/(num_nodes**0.5)*1.1
-    mu = 0.1 #1/(num_nodes**0.5)*1.1
-    eps = 0.001
-    n_init = 1
-    k1_init = 0 #num_nodes**2*(5/100)
-    step_size = 1
-    eps_k1 = 40000
+    # # GCN PARAMS
+    # threshold = 1.2
+    # nhid = 2000
+    # nout = 2
+    # dropout = 0.5
+    # lr = 0.01
+    # weight_decay = 0
+    # num_epochs = 200
+    #
+    # # NOVEL PARAMS
+    # n_neighbors = 50
+    # k0 = 4
+    # lam = 0.01 #1/(num_nodes**0.5)*1.1
+    # mu = 0.1 #1/(num_nodes**0.5)*1.1
+    # eps = 0.001
+    # n_init = 1
+    # k1_init = 0 #num_nodes**2*(5/100)
+    # step_size = 1
+    # eps_k1 = 40000
 
     start = time.time()
     print("fake dataset!")
@@ -136,10 +134,10 @@ if __name__ == "__main__":
     write_()
 
     def make_subplot(ax,test,true_locs,title):
-        ax.scatter(test[:num_anchors,0].detach().numpy(), test[:num_anchors,1].detach().numpy(), label="predicted a", marker="+",color="blue")
-        ax.scatter(true_locs[:num_anchors,0].detach().numpy(), true_locs[:num_anchors,1].detach().numpy(), label="actual a", marker="x",color="orange")#,alpha=0.1)
-        ax.scatter(test[num_anchors:,0].detach().numpy(), test[num_anchors:,1].detach().numpy(), label="predicted",color="blue")#,alpha=0.1)
-        ax.scatter(true_locs[num_anchors:,0].detach().numpy(), true_locs[num_anchors:,1].detach().numpy(), label="actual",color="orange")#,alpha=0.1)
+        ax.scatter(true_locs[:num_anchors,0].detach().numpy(), true_locs[:num_anchors,1].detach().numpy(), label="actual a", marker="x",color=TRUE_COLOR)#,alpha=0.1)
+        ax.scatter(test[:num_anchors,0].detach().numpy(), test[:num_anchors,1].detach().numpy(), label="predicted a", marker="+",color=ABLATION_COLOR)
+        ax.scatter(true_locs[num_anchors:,0].detach().numpy(), true_locs[num_anchors:,1].detach().numpy(), label="actual",color=TRUE_COLOR)#,alpha=0.1)
+        ax.scatter(test[num_anchors:,0].detach().numpy(), test[num_anchors:,1].detach().numpy(), label="predicted",color=ABLATION_COLOR)#,alpha=0.1)
         # ax.legend()
         ax.set_title(title)
 
@@ -147,17 +145,17 @@ if __name__ == "__main__":
 
     ax = axes[0][0]
     test = decomposition
-    title = f"Decomposition ({np.round(decomposition_error,2)})"
+    title = f"MDS ({np.round(decomposition_error,2)})"
     make_subplot(ax, test, batch.y, title)
 
     ax = axes[0][1]
     test = rank_reduced_decomposition
-    title = f"Reduce Rank + \nDecomposition ({np.round(rank_reduced_decomposition_error,2)})"
+    title = f"PSVD + MDS ({np.round(rank_reduced_decomposition_error,2)})"
     make_subplot(ax, test, batch.y, title)
 
     ax = axes[0][2]
     test = x_decomposition
-    title = f"Sparse Inference + \nDecomposition ({np.round(x_decomposition_error,2)})"
+    title = f"SMI + MDS ({np.round(x_decomposition_error,2)})"
     make_subplot(ax, test, batch.y, title)
 
     ax = axes[1][0]
@@ -167,7 +165,7 @@ if __name__ == "__main__":
 
     ax = axes[1][1]
     test = rank_reduced_lle
-    title = f"Reduce Rank + \nLLE ({np.round(rank_reduced_lle_error,2)})"
+    title = f"PSVD + LLE ({np.round(rank_reduced_lle_error,2)})"
     make_subplot(ax, test, batch.y, title)
 
     ax = axes[1][2]

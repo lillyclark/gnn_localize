@@ -19,8 +19,8 @@ if __name__ == "__main__":
 
     print("EXPERIMENT: vary num nodes")
     filename = "vary_num_nodes.txt"
-    figname1 = "vary_num_nodes_compare.jpg"
-    figname2 = "vary_num_nodes_runtime.jpg"
+    figname1 = "vary_num_nodes.pdf"
+    # figname2 = "vary_num_nodes_runtime1.jpg"
 
     num_nodes_list = [50,100,250,500,750,1000]
     num_anchors_percent = 10
@@ -28,30 +28,29 @@ if __name__ == "__main__":
     loss_fn = torch.nn.MSELoss()
 
     # DATA PARAMS
-    std = 0.1
-    p_nLOS = 10
-    noise_floor_dist = 7
+    # std = 0.1
+    # p_nLOS = 10
+    # noise_floor_dist = 7
 
     # GCN PARAMS
-    threshold = 1.2
-    nhid = 2000
-    nout = 2
-    dropout = 0.5
-    lr = 0.01
-    weight_decay = 0
-    num_epochs = 200
+    # threshold = 1.2
+    # nhid = 2000
+    # nout = 2
+    # dropout = 0.5
+    # lr = 0.01
+    # weight_decay = 0
+    # num_epochs = 200
 
     # NOVEL PARAMS
-    n_neighbors = 20
-    k0 = 4
-    lam = 0.01 #1/(num_nodes**0.5)*1.1
-    mu = 0.1 #1/(num_nodes**0.5)*1.1
-    eps = 0.001
-    n_init = 2 #10
-
-    k1_init_percent = 8 #5
-    step_size = 1
-    eps_k1 = 40000
+    # n_neighbors = 20
+    # k0 = 4
+    # lam = 0.01 #1/(num_nodes**0.5)*1.1
+    # mu = 0.01 #1/(num_nodes**0.5)*1.1
+    # eps = 0.001
+    # n_init = 5
+    # k1_init_percent = 8 #5
+    # step_size = 1
+    # eps_k1 = 0.01 #40000
 
     def writeA():
         nowTime = datetime.datetime.now().strftime('%Y-%m-%d-%H_%M_%S')  # Get the Now time
@@ -72,7 +71,7 @@ if __name__ == "__main__":
         file_handle.write("mu: " +str(np.round(mu,3)) + '\n')
         file_handle.write("eps: " +str(eps) + '\n')
         file_handle.write("n_init: " +str(n_init) + '\n')
-        file_handle.write("k1_init_percent: " +str(k1_init_percent) + '\n')
+        # file_handle.write("k1_init_percent: " +str(k1_init_percent) + '\n')
         file_handle.write("step_size: " +str(step_size) + '\n')
         file_handle.write("eps_k1: " +str(eps_k1) + '\n')
 
@@ -129,7 +128,7 @@ if __name__ == "__main__":
             anchor_locs = batch.y[batch.anchors]
             noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
             start = time.time()
-            k1_init = num_nodes**2*(k1_init_percent/100)
+            # k1_init = num_nodes**2*(k1_init_percent/100)
             X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, eps_k1=eps_k1, plot=False)
             # print("****to debug, assume k1 known****")
             # k1 = true_k1+100 #p_nLOS*(num_nodes**2)
@@ -152,24 +151,34 @@ if __name__ == "__main__":
     writeLine("Novel runtime:"+str(novel_runtime_list),True)
 
     fig1, ax1 = plt.subplots(figsize=(6,3))
-    ax1.plot(num_nodes_list, novel_list, marker='o',color='blue',label="SMILE")
-    ax1.plot(num_nodes_list, gcn_list, marker='o',color='orange',label="GCN")
-    ax1.set_xlabel(f'Number of Nodes ({num_anchors_percent}% are anchors)')
-    ax1.set_ylabel('RMSE')
+    ax1.plot(num_nodes_list, novel_runtime_list, marker='o',color=SMILE_COLOR,label="SMILE", linestyle='--')
+    ax1.plot(num_nodes_list, gcn_runtime_list, marker='o',color=GCN_COLOR,label="GCN", linestyle='--')
+    ax1.set_xlabel(f'Number of Nodes')
+    ax1.set_ylabel('Runtime')
     ax1.legend()
     fig1.tight_layout()
     fig1.savefig(figname1)
     print("plot saved to",figname1)
 
-    fig2, ax2 = plt.subplots(figsize=(6,3))
-    ax2.plot(num_nodes_list, novel_list, marker='o',color='blue')
-    ax2.set_xlabel(f'Number of Nodes ({num_anchors_percent}% are anchors)')
-    ax2.set_ylabel('RMSE')
-    ax2.tick_params(axis='y', labelcolor='blue')
-    ax3 = ax2.twinx()
-    ax3.plot(num_nodes_list, novel_runtime_list, marker='o', color='orange')
-    ax3.set_ylabel('Runtime (sec)')
-    ax3.tick_params(axis='y', labelcolor='orange')
-    fig2.tight_layout()
-    fig2.savefig(figname2)
-    print("plot saved to",figname2)
+    # fig1, ax1 = plt.subplots(figsize=(6,3))
+    # ax1.plot(num_nodes_list, novel_list, marker='o',color='blue',label="SMILE")
+    # ax1.plot(num_nodes_list, gcn_list, marker='o',color='orange',label="GCN")
+    # ax1.set_xlabel(f'Number of Nodes ({num_anchors_percent}% are anchors)')
+    # ax1.set_ylabel('RMSE')
+    # ax1.legend()
+    # fig1.tight_layout()
+    # fig1.savefig(figname1)
+    # print("plot saved to",figname1)
+    #
+    # fig2, ax2 = plt.subplots(figsize=(6,3))
+    # ax2.plot(num_nodes_list, novel_list, marker='o',color='blue')
+    # ax2.set_xlabel(f'Number of Nodes ({num_anchors_percent}% are anchors)')
+    # ax2.set_ylabel('RMSE')
+    # ax2.tick_params(axis='y', labelcolor='blue')
+    # ax3 = ax2.twinx()
+    # ax3.plot(num_nodes_list, novel_runtime_list, marker='o', color='orange')
+    # ax3.set_ylabel('Runtime (sec)')
+    # ax3.tick_params(axis='y', labelcolor='orange')
+    # fig2.tight_layout()
+    # fig2.savefig(figname2)
+    # print("plot saved to",figname2)

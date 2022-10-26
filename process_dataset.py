@@ -12,29 +12,31 @@ import scipy.sparse as sp
 from scipy.io import loadmat
 from sklearn.linear_model import LinearRegression
 
+TRUE_COLOR = 'blue'
+
 # from torch.nn.functional import normalize
 
 pdist = torch.nn.PairwiseDistance(p=2)
 
-def normalize(x, use_sparse=True):
-    D = np.array(x.sum(1))
-    r_inv = np.power(D, -0.5).flatten()
-    r_inv[np.isinf(r_inv)] = 0.
-    if use_sparse:
-        r_mat_inv = sp.diags(r_inv)
-    else:
-        r_mat_inv = np.diag(r_inv)
-    mx = r_mat_inv.dot(x).dot(r_mat_inv)
-    return mx
-
-def normalize_tensor(x):
-    D = x.sum(1)
-    r_inv = (D**-0.5).flatten()
-    r_inv[torch.isnan(r_inv)]=0
-    r_inv[torch.isinf(r_inv)]=0
-    r_mat_inv = torch.diag(r_inv)
-    mx = torch.mm(torch.mm(r_mat_inv,x),r_mat_inv)
-    return mx
+# def normalize(x, use_sparse=True):
+#     D = np.array(x.sum(1))
+#     r_inv = np.power(D, -0.5).flatten()
+#     r_inv[np.isinf(r_inv)] = 0.
+#     if use_sparse:
+#         r_mat_inv = sp.diags(r_inv)
+#     else:
+#         r_mat_inv = np.diag(r_inv)
+#     mx = r_mat_inv.dot(x).dot(r_mat_inv)
+#     return mx
+#
+# def normalize_tensor(x):
+#     D = x.sum(1)
+#     r_inv = (D**-0.5).flatten()
+#     r_inv[torch.isnan(r_inv)]=0
+#     r_inv[torch.isinf(r_inv)]=0
+#     r_mat_inv = torch.diag(r_inv)
+#     mx = torch.mm(torch.mm(r_mat_inv,x),r_mat_inv)
+#     return mx
 
 def matrix_from_locs(locs):
     num_nodes = locs.shape[0]
@@ -138,10 +140,11 @@ def fake_dataset(num_nodes, num_anchors, threshold=1.0, p_nLOS=10, std=0.1, nLOS
     noisy_distance_matrix = distance_matrix + noise + nLOS_noise
 
     if noise_floor_dist:
-        print("distances over", noise_floor_dist, "are measured as", np.ceil(5*2**0.5))
+        max_dist = torch.max(distance_matrix)
+        print("distances over", noise_floor_dist, "are measured as", max_dist)
         # turn distances above a threshold into noise floor distances
         extra_k1 = np.count_nonzero(noisy_distance_matrix>noise_floor_dist)
-        noisy_distance_matrix[noisy_distance_matrix>noise_floor_dist] = np.ceil(5*2**0.5)
+        noisy_distance_matrix[noisy_distance_matrix>noise_floor_dist] = max_dist
         print("original k1:", true_k1, "new k1:", true_k1+extra_k1)
         true_k1 += extra_k1
 
@@ -226,11 +229,12 @@ def pick_a_moment(filename='datasets/sep18d_clean.csv'):
     return best_moment, max_nodes
 
 
-def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kref=40, threshold=50.0):
+def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kref=40, threshold=50.0, plot=False, verbose=False, augment=False):
     start = time.time()
-    data = pd.read_csv(filename,header=0)
+    data = pd.read_csv(filename,header=0,usecols=['timestamp','tags','transmitter','transmitter_x','transmitter_y','receiver','receiver_x','receiver_y','measured_path_loss_dB','visible'],low_memory=False)
     data = data[data['tags'].isna()] # only real data
-    print(f"Loaded dataset in {time.time()-start} seconds")
+    if verbose:
+        print(f"Loaded dataset in {time.time()-start} seconds")
 
     times = data['timestamp']
     unique_times = tuple(set(times))
@@ -277,20 +281,28 @@ def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kr
             pathlosses.append(pathloss)
             distances.append(np.sum((true_locs[tx_id]-true_locs[rx_id])**2)**0.5)
 
-    print("*****")
-    k1_nLOS = torch.sum(nLOS)
-    print("nLOS:",k1_nLOS)
+    del data
 
-    print("eta, Kref:")
-    print(get_eta_Kref(np.array(pathlosses), np.array(distances)))
-    # assert False
+    if verbose:
+        print("*****")
+        num_LOS = torch.sum(LOS)
+        print("actually LOS:",num_LOS)
+        print("%:", num_LOS/(num_nodes*(num_nodes-1)))
+        k1_nLOS = torch.sum(nLOS)
+        print("nLOS:",k1_nLOS)
+        print("%:", k1_nLOS/(num_nodes*(num_nodes-1)))
 
-    k1_missing = np.sum(noisy_distance_matrix==0)-num_nodes
-    print("missing:", k1_missing)
+        print("eta, Kref:")
+        print(get_eta_Kref(np.array(pathlosses), np.array(distances)))
+        # assert False
 
-    print("k1:",k1_nLOS+k1_missing)
-    print("%:",(k1_nLOS+k1_missing)/(num_nodes*(num_nodes-1)))
-    print("*****")
+        k1_missing = np.sum(noisy_distance_matrix==0)-num_nodes
+        print("missing:", k1_missing)
+        print("%:",k1_missing/(num_nodes*(num_nodes-1)))
+
+        print("k1:",k1_nLOS+k1_missing)
+        print("%:",(k1_nLOS+k1_missing)/(num_nodes*(num_nodes-1)))
+        print("*****")
 
     noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
     # print("NOISY MATRIX")
@@ -303,59 +315,93 @@ def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kr
     true_dist = matrix_from_locs(true_locs)
     # print(np.round(true_dist))
 
-    # fig, (ax0,ax1,ax2) = plt.subplots(1,3)
-    #
-    # ax0.hist(noisy_distance_matrix[LOS!=0].flatten()-true_dist[LOS!=0].flatten(),bins=20)
-    # ax0.set_title("how much noise is there for LOS links")
-    LOS_err = (noisy_distance_matrix[LOS!=0].flatten()-true_dist[LOS!=0].flatten()).numpy()
-    print("LOS mean & std dev",np.mean(LOS_err),np.std(LOS_err))
-    #
-    # # ax1.hist(noisy_distance_matrix[nLOS!=0].flatten()-true_dist[nLOS!=0].flatten(),bins=20)
-    # # ax1.set_title("how much noise is there for nLOS")
-    nLOS_err = (noisy_distance_matrix[nLOS!=0].flatten()-true_dist[nLOS!=0].flatten()).numpy()
-    print("nLOS mean & std dev",np.mean(nLOS_err),np.std(nLOS_err))
-    #
-    # ax1.hist(noisy_distance_matrix[noisy_distance_matrix!=0].flatten()-true_dist[noisy_distance_matrix!=0].flatten(),bins=20)
-    # ax1.set_title("how much noise is there when a measurement is present")
-    meas_err = (noisy_distance_matrix[noisy_distance_matrix!=0].flatten()-true_dist[noisy_distance_matrix!=0].flatten()).numpy()
-    print("mean mean & std dev",np.mean(meas_err),np.std(meas_err))
-    #
-    print("Assuming we know the actual max distance....")
-    fill_max = torch.max(true_dist)+1
-    print("FILL MAX:", fill_max)
-    noisy_distance_matrix[noisy_distance_matrix==0] = fill_max
-    # np.fill_diagonal(noisy_distance_matrix,0)
-    noisy_distance_matrix.fill_diagonal_(0)
-    #
-    # ax2.hist(noisy_distance_matrix.flatten()-true_dist.flatten(),bins=20)
-    # ax2.set_title("how much noise is there when missing="+str(fill_max))
-    all_err = (noisy_distance_matrix.flatten()-true_dist.flatten()).numpy()
-    print("all mean & std dev",np.mean(all_err),np.std(all_err))
+    if plot:
+        fig, axes = plt.subplots(2,2,figsize=(6,3))
+        ax0, ax1 = axes[0]
+        ax2, ax3 = axes[1]
+        LOS_err = (noisy_distance_matrix[LOS!=0].flatten()-true_dist[LOS!=0].flatten()).numpy()
+        ax0.hist(LOS_err,bins=20,color=TRUE_COLOR)
+        ax0.set_title("N")
+        print("LOS mean & std dev",np.mean(LOS_err),np.std(LOS_err))
+        nLOS_err = (noisy_distance_matrix[nLOS!=0].flatten()-true_dist[nLOS!=0].flatten()).numpy()
+        ax1.hist(nLOS_err,bins=20,color=TRUE_COLOR)
+        ax1.set_title("S")
+        print("nLOS mean & std dev",np.mean(nLOS_err),np.std(nLOS_err))
+        meas_err = (noisy_distance_matrix[noisy_distance_matrix!=0].flatten()-true_dist[noisy_distance_matrix!=0].flatten()).numpy()
+        ax2.hist(meas_err,bins=20,color=TRUE_COLOR)
+        ax2.set_title("N + S")
+        print("measured mean mean & std dev",np.mean(meas_err),np.std(meas_err))
 
-    # plt.show()
+        if augment:
+            loc, scale = -6.259985, 36.173862
+            print(f"fill in missing measurements with noise from N({loc},{scale**2})")
+            noise_for_augment = np.random.normal(loc=loc,scale=scale,size=(num_nodes,num_nodes))
+            noise_for_augment = torch.Tensor(noise_for_augment)
+            noisy_distance_matrix[noisy_distance_matrix==0] = true_dist[noisy_distance_matrix==0] + noise_for_augment[noisy_distance_matrix==0]
+        else:
+            fill_max = torch.max(true_dist)
+            print("FILL MAX:", fill_max)
+            noisy_distance_matrix[noisy_distance_matrix==0] = fill_max
+        noisy_distance_matrix.fill_diagonal_(0)
+
+        ax3.hist(noisy_distance_matrix.flatten()-true_dist.flatten(),bins=20,color=TRUE_COLOR)
+        ax3.set_title("O tilde - D")
+        all_err = (noisy_distance_matrix.flatten()-true_dist.flatten()).numpy()
+        print("ALL mean & std dev",np.mean(all_err),np.std(all_err))
+        fig.tight_layout()
+        if augment:
+            fig.savefig("robots_augmented_error.pdf")
+        else:
+            fig.savefig("robots_error.pdf")
+
+    else:
+        if augment:
+            loc, scale = -6.259985, 36.173862
+            if verbose:
+                print(f"fill in missing measurements with noise from N({loc},{scale**2})")
+            noise_for_augment = np.random.normal(loc=loc,scale=scale,size=(num_nodes,num_nodes))
+            noise_for_augment = torch.Tensor(noise_for_augment)
+            noisy_distance_matrix[noisy_distance_matrix==0] = true_dist[noisy_distance_matrix==0] + noise_for_augment[noisy_distance_matrix==0]
+        else:
+            fill_max = torch.max(true_dist)
+            if verbose:
+                print("FILL MAX:", fill_max)
+            noisy_distance_matrix[noisy_distance_matrix==0] = fill_max
+        noisy_distance_matrix.fill_diagonal_(0)
 
     features = noisy_distance_matrix.clone()
     adjacency_matrix = features < threshold
     features[features > threshold]=0
-    print("TODO: ROW NORMALIZE INSTEAD")
-    features = normalize_tensor(features)
-    normalized_adjacency_matrix = normalize_tensor(adjacency_matrix.float())
+
+    def normalize(mx):
+        """Row-normalize sparse matrix"""
+        rowsum = np.array(mx.sum(1))+1e-9
+        r_inv = np.power(rowsum, -1).flatten()
+        r_inv[np.isinf(r_inv)] = 0.
+        r_mat_inv = sp.diags(r_inv)
+        mx = r_mat_inv.dot(mx)
+        return torch.Tensor(mx)
+
+    features = normalize(features)
+    normalized_adjacency_matrix = normalize(adjacency_matrix.float())
     data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
     return DataLoader([data],shuffle=False), num_nodes, noisy_distance_matrix
 
-def load_cellphone_data(num_anchors=3, threshold=10.0):
+def load_cellphone_data(num_anchors=3, threshold=10.0, plot=False, verbose=False):
     num_nodes = 11
+    if verbose:
+        print(f"{num_nodes} nodes and {num_anchors} anchors")
 
     anchor_mask = torch.Tensor([i < num_anchors for i in range(num_nodes)]).bool()
     node_mask = ~anchor_mask
 
     true_locs = torch.Tensor([[1.0, 14.0, 3.0, 21.0, 9.0, 22.0, 10.0, 3.0, 27.0, 20.0, 18.0],
-    	     [7.0, 3.0, 19.0, 18.0, 33.0, 3.0, 11.0, 32.0, 27.0, 12.0, 34.0]]).T
+    	                      [7.0, 3.0, 19.0, 18.0, 33.0, 3.0, 11.0, 32.0, 27.0, 12.0, 34.0]]).T
+
+    indices = [0, 7, 5, 8, 1, 2, 3, 4, 6, 9, 10]
 
     # convert to meters
     true_locs *= 0.3048
-
-    # First Row represents the x-coordinates of the nodes, and the second row represents the y-coordinates. All values are in feet.
 
     pathlosses = np.array([[-100.00, -68.308, -62.299, -67.051, -68.141, -66.400, -60.864, -77.891, -68.217, -69.553, -68.678],
     	      [-67.414, -100.00, -68.205, -65.299, -69.623, -55.270, -59.656, -71.891, -69.178, -65.439, -74.507],
@@ -369,11 +415,21 @@ def load_cellphone_data(num_anchors=3, threshold=10.0):
     	      [-66.488, -63.775, -66.978, -51.330, -69.295, -56.240, -63.301, -78.221, -65.041, -100.00, -70.042],
     	      [-72.078, -80.838, -73.341, -68.369, -57.963, -76.385, -79.549, -68.691, -66.980, -73.718, -100.00]])
 
+    true_locs_ = torch.zeros_like(true_locs)
+    pathlosses_ = np.zeros_like(pathlosses)
+    for i in range(len(indices)):
+        true_locs_[i] = true_locs[indices[i]]
+        for j in range(len(indices)):
+            pathlosses_[i][j] = pathlosses[indices[i]][indices[j]]
+
+    true_locs = true_locs_
+    pathlosses = pathlosses_
+
     true_dist = matrix_from_locs(true_locs)
     # print("true dist squared:")
     # print(true_dist**2)
 
-    # pathlosses = 10*np.log10(np.array(true_dist))
+    # pathlosses = -2.9032366*10*np.log10(np.array(true_dist))-46.120605
     # print("making matrix symmetric right from the start")
     # pathlosses = (pathlosses + pathlosses.T)/2
 
@@ -386,41 +442,51 @@ def load_cellphone_data(num_anchors=3, threshold=10.0):
                 dist.append(true_dist[i][j])
 
     eta, Kref = get_eta_Kref(np.array(pl), np.array(dist))
-    print(eta, Kref)
 
-    # eta, Kref = -3, -50
+    if verbose:
+        print("eta:",eta, "Kref:", Kref)
+        print("max dist:", np.max(np.array(dist)))
 
-    # logdist = 10*np.log10(np.array(dist))
-    # pl = np.array(pl)
-    # plt.scatter(logdist, pl)
-    # print(min(logdist), max(logdist))
-    # plt.plot([min(logdist), max(logdist)],
-    #         [eta.item()*min(logdist)+Kref.item(), eta.item()*max(logdist)+Kref.item()])
-    # plt.show()
-
-    if False:
+    if plot:
+        fig, ax = plt.subplots(1,1,figsize=(6,3))
         d_ = pathloss_to_dist(pl, eta, Kref)
         noise = d_ - dist
-        plt.plot(noise)
-        plt.show()
+        print("error above 5m", np.count_nonzero(noise>5))
+        ax.hist(noise,bins=121,color=TRUE_COLOR)
+        ax.set_xlabel("Measurement error (m)")
+        ax.set_ylabel("Frequency")
+        fig.tight_layout()
+        fig.savefig("cell_phone_error.pdf")
 
     noisy_distance_matrix = pathloss_to_dist(pathlosses, eta, Kref)
     noisy_distance_matrix = torch.Tensor(noisy_distance_matrix)
     noisy_distance_matrix.fill_diagonal_(0)
 
-    all_err = (noisy_distance_matrix.flatten()-true_dist.flatten()).numpy()
-    print("all mean & std dev",np.mean(all_err),np.std(all_err))
+    if plot:
+        all_err = (noisy_distance_matrix.flatten()-true_dist.flatten()).numpy()
+        print("mean:", np.mean(all_err), "std dev:", np.std(all_err), "var:", np.std(all_err)**2)
 
     features = noisy_distance_matrix.clone()
     adjacency_matrix = features < threshold
     features[features > threshold]=0
-    print("TODO: ROW NORMALIZE INSTEAD")
-    features = normalize_tensor(features)
-    normalized_adjacency_matrix = normalize_tensor(adjacency_matrix.float())
+
+    def normalize(mx):
+        """Row-normalize sparse matrix"""
+        rowsum = np.array(mx.sum(1))+1e-9
+        r_inv = np.power(rowsum, -1).flatten()
+        r_inv[np.isinf(r_inv)] = 0.
+        r_mat_inv = sp.diags(r_inv)
+        mx = r_mat_inv.dot(mx)
+        return torch.Tensor(mx)
+
+    features = normalize(features)
+    normalized_adjacency_matrix = normalize(adjacency_matrix.float())
     data = Data(x=features, adj=normalized_adjacency_matrix, y=true_locs, anchors=anchor_mask, nodes=node_mask)
     return DataLoader([data],shuffle=False), num_nodes, noisy_distance_matrix
 
 
 if __name__=="__main__":
     print("executing process_dataset.py")
-    data_loader, num_nodes, noisy_distance_matrix, true_k1 = fake_dataset(500, 50, threshold=1.2, p_nLOS=10)
+    # data_loader, num_nodes, noisy_distance_matrix, true_k1 = fake_dataset(500, 50, threshold=1.2, p_nLOS=10)
+    # load_cellphone_data(num_anchors=3, threshold=10, plot=True)
+    load_a_moment(eta=4.57435973, Kref=13.111276899657597, plot=True, verbose=True, augment=True)

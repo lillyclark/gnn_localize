@@ -35,7 +35,10 @@ def check_rank(X):
     return np.linalg.matrix_rank(X)
 
 def reduce_rank(X,k=4):
-    U, S, V = svds(X,k)
+    if X.shape[0] == k:
+        U, S, V = np.linalg.svd(X,k)
+    else:
+        U, S, V = svds(X,k)
     X_ = U.dot(np.diag(S)).dot(V)
     return torch.Tensor(X_)
 
@@ -90,7 +93,7 @@ def separate_dataset_multiple_inits(measured, k0, k1, n_init=10, lam=0.1, mu=0.1
 def separate_dataset_find_k1(measured, k0, k1_init=0, step_size=1, n_init=1, lam=0.1, mu=0.1, eps=0.001, eps_k1=0.01, plot=False, constrain_solution=False):
     if check_rank(measured**2) == k0:
         print("already low rank")
-        return measured**2, torch.zeros_like(measured), 0
+        return measured**2, torch.zeros_like(measured), 0, 0
 
     num_edges = int(measured.shape[0]*measured.shape[1])
     step_size = int(num_edges*step_size/100)
@@ -102,6 +105,7 @@ def separate_dataset_find_k1(measured, k0, k1_init=0, step_size=1, n_init=1, lam
         if (fi-ff)/fi <= eps_k1:
             return X, Y, ff, k1
         fi = ff
+    return X, Y, ff, k1
 
 if __name__=="__main__":
     torch.manual_seed(0)

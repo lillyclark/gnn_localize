@@ -19,7 +19,8 @@ if __name__=="__main__":
 
     print("EXPERIMENT: CELLPHONE DATA")
     filename = "cellphone.txt"
-    figname = "cellphone.jpg"
+    figname = "cellphone.pdf"
+    figname2 = "cellphone_rmse.pdf"
 
     num_anchors = 4
     loss_fn = torch.nn.MSELoss()
@@ -28,46 +29,37 @@ if __name__=="__main__":
     eta = -2.9032366
     Kref = -46.120605
 
-    # GCN PARAMS
-    threshold = 5.0
-    nhid = 2000
-    nout = 2
-    dropout = 0.5
-    lr = 0.01
-    weight_decay = 0
-    num_epochs = 200
+    # # GCN PARAMS
+    threshold = 5.2
+
+    # NOVEL PARAMS
+    n_init = 10
+    n_neighbors = 3
+    lam = 0.05
+    mu = 0.05
+    eps = 0.001
+    step_size = 1
+    eps_k1 = 0.01
+    constrain_solution = False
 
     data_loader, num_nodes, noisy_distance_matrix = load_cellphone_data(num_anchors=num_anchors, threshold=threshold)
     print("dataset loaded...")
 
-    # NOVEL PARAMS
-    n_neighbors = 3 #5
-    k0 = 4
-    k1 = 29
-    lam = 1/(num_nodes**0.5)*0.7
-    mu = 1/(num_nodes**0.5)*0.7
-    eps = 0.001
-    n_init = 1 #100
-    k1_init = 0 #num_nodes**2*(5/100)
-    step_size = 1
-    eps_k1 = 0.001
-
-    if True:
-        print("GCN....")
-        model = GCN(nfeat=num_nodes, nhid=nhid, nout=nout, dropout=dropout)
-        optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-        gcn_train_time = train_GCN(model, optimizer, loss_fn, data_loader, num_epochs)
-        gcn_pred, gcn_error, gcn_predict_time = test_GCN(model, loss_fn, data_loader)
-        gcn_total_time = gcn_train_time + gcn_predict_time
-        print("gcn RMSE:",gcn_error)
-        print("...done")
+    print("GCN....")
+    model = GCN(nfeat=num_nodes, nhid=nhid, nout=nout, dropout=dropout)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    gcn_train_time = train_GCN(model, optimizer, loss_fn, data_loader, num_epochs)
+    gcn_pred, gcn_error, gcn_predict_time = test_GCN(model, loss_fn, data_loader)
+    gcn_total_time = gcn_train_time + gcn_predict_time
+    print("gcn RMSE:",gcn_error)
+    print("...done")
 
     print("novel...")
     for batch in data_loader:
         anchor_locs = batch.y[batch.anchors]
         start = time.time()
-        X, Y, ff = separate_dataset_multiple_inits(noisy_distance_matrix, k0=k0, k1=k1, n_init=n_init, lam=lam, mu=mu, eps=eps)
-        # X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, eps_k1=eps_k1, plot=False)
+        # X, Y, ff = separate_dataset_multiple_inits(noisy_distance_matrix, k0=k0, k1=k1, n_init=n_init, lam=lam, mu=mu, eps=eps)
+        X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, eps_k1=eps_k1, plot=False)
         print("k1:",k1)
         novel_pred, indices = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True, anchors_as_neighbors=False, return_indices=True)
         novel_solve_time = time.time()-start
@@ -75,28 +67,6 @@ if __name__=="__main__":
         novel_error = torch.sqrt(novel_error).item()
         print("novel RMSE:",novel_error)
     print("...done")
-
-    # if False:
-    #     print("solve direcct....")
-    #     for batch in data_loader:
-    #         anchor_locs = batch.y[batch.anchors]
-    #         direct_pred = solve_direct(noisy_distance_matrix, anchor_locs, mode="Kabsch")
-    #         direct_error = loss_fn(direct_pred[batch.nodes], batch.y[batch.nodes])
-    #         direct_error = torch.sqrt(direct_error).item()
-    #         print("direct RMSE:",direct_error)
-    #     print("....done")
-    #
-    # if False:
-    #     print("reduce rank and solve direcct....")
-    #     for batch in data_loader:
-    #         denoised = denoise_via_SVD(noisy_distance_matrix**2,k=4,fill_diag=False,take_sqrt=False)
-    #         anchor_locs = batch.y[batch.anchors]
-    #         direct2_pred = solve_direct(denoised, anchor_locs, mode="Kabsch", dont_square=True)
-    #         direct2_error = loss_fn(direct2_pred[batch.nodes], batch.y[batch.nodes])
-    #         direct2_error = torch.sqrt(direct2_error).item()
-    #         print("direct2 RMSE:",direct2_error)
-    #     print("....done")
-
 
     def write_():
         nowTime = datetime.datetime.now().strftime('%Y-%m-%d-%H_%M_%S')  # Get the Now time
@@ -135,5 +105,5 @@ if __name__=="__main__":
         print("Results written to", filename)
     write_()
 
-    plot_out(figname, batch, gcn_pred, "GCN (Yan et al.)", novel_pred, "Novel", indices=indices)
-    # plot_out("_"+figname, batch, direct_pred, "Direct (Kabsch)", novel_pred, "Novel")
+    plot_rmse(figname2, batch.y, {"GCN":gcn_pred, "SMILE":novel_pred})
+    plot_out(figname, batch, gcn_pred, f"GCN ({np.round(gcn_error,2)})", novel_pred, f"SMILE ({np.round(novel_error,2)})", indices=indices)
