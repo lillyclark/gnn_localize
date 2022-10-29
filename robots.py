@@ -13,13 +13,9 @@ import numpy as np
 from experiments import *
 
 if __name__=="__main__":
-    seed_ = 0
-    np.random.seed(seed_)
-    torch.manual_seed(seed_)
-
     print("EXPERIMENT: ROBOT DATA")
     filename = "robots.txt"
-    figname = "robot1.jpg"
+    figname = "robots_errorlines.pdf"
     figname2 = "robot_rmse1.jpg"
 
     num_anchors = 13
@@ -30,11 +26,11 @@ if __name__=="__main__":
     Kref = 13.111276899657597
 
     # # GCN PARAMS
-    threshold = 80
+    threshold = 110 #110:47.97 #100: 53.16 #80: 59.89
 
     # NOVEL PARAMS
-    n_init = 20
-    n_neighbors = 11
+    n_init = 10 #0
+    n_neighbors = 17
     lam = 0.05
     mu = 0.05
     eps = 0.001
@@ -44,28 +40,10 @@ if __name__=="__main__":
 
     data_loader, num_nodes, noisy_distance_matrix = load_a_moment(eta=eta, Kref=Kref, threshold=threshold, plot=False, verbose=False, augment=True)
 
-    print("GCN....")
-    model = GCN(nfeat=num_nodes, nhid=nhid, nout=nout, dropout=dropout)
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-    gcn_train_time = train_GCN(model, optimizer, loss_fn, data_loader, num_epochs)
-    gcn_pred, gcn_error, gcn_predict_time = test_GCN(model, loss_fn, data_loader)
-    gcn_total_time = gcn_train_time + gcn_predict_time
-    print("gcn RMSE:",gcn_error)
-    print("...done")
-
-    print("novel...")
-    for batch in data_loader:
-        anchor_locs = batch.y[batch.anchors]
-        start = time.time()
-        # X, Y, ff = separate_dataset_multiple_inits(noisy_distance_matrix, k0=k0, k1=k1, n_init=n_init, lam=lam, mu=mu, eps=eps)
-        X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, eps_k1=eps_k1, plot=False)
-        print("k1:",k1)
-        novel_pred, indices = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True, anchors_as_neighbors=False, return_indices=True)
-        novel_solve_time = time.time()-start
-        novel_error = loss_fn(novel_pred[batch.nodes], batch.y[batch.nodes])
-        novel_error = torch.sqrt(novel_error).item()
-        print("novel RMSE:",novel_error)
-    print("...done")
+    avg_gcn_error = []
+    avg_gcn_time = []
+    avg_novel_error = []
+    avg_novel_time = []
 
     def write_():
         nowTime = datetime.datetime.now().strftime('%Y-%m-%d-%H_%M_%S')  # Get the Now time
@@ -102,7 +80,50 @@ if __name__=="__main__":
 
         file_handle.close()
         print("Results written to", filename)
+
+    for seed_ in range(10):
+        print("seed_:",seed_)
+
+        np.random.seed(seed_)
+        torch.manual_seed(seed_)
+
+        print("GCN....")
+        model = GCN(nfeat=num_nodes, nhid=nhid, nout=nout, dropout=dropout)
+        optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+        gcn_train_time = train_GCN(model, optimizer, loss_fn, data_loader, num_epochs)
+        gcn_pred, gcn_error, gcn_predict_time = test_GCN(model, loss_fn, data_loader)
+        gcn_total_time = gcn_train_time + gcn_predict_time
+        print("gcn RMSE:",gcn_error)
+        print("...done")
+
+        print("novel...")
+        for batch in data_loader:
+            anchor_locs = batch.y[batch.anchors]
+            start = time.time()
+            # k1 = 28
+            # X, Y, ff = separate_dataset_multiple_inits(noisy_distance_matrix, k0=k0, k1=k1, n_init=n_init, lam=lam, mu=mu, eps=eps)
+            X, Y, ff, k1 = separate_dataset_find_k1(noisy_distance_matrix, k0, k1_init=int(k1_init), step_size=step_size, n_init=n_init, lam=lam, mu=mu, eps=eps, eps_k1=eps_k1, plot=False)
+            print("k1:",k1)
+            novel_pred, indices = solve_like_LLE(num_nodes, num_anchors, n_neighbors, anchor_locs, X, dont_square=True, anchors_as_neighbors=False, return_indices=True)
+            novel_solve_time = time.time()-start
+            novel_error = loss_fn(novel_pred[batch.nodes], batch.y[batch.nodes])
+            novel_error = torch.sqrt(novel_error).item()
+            print("novel RMSE:",novel_error)
+        print("...done")
+
+        avg_gcn_error.append(gcn_error)
+        avg_gcn_time.append(gcn_total_time)
+        avg_novel_error.append(novel_error)
+        avg_novel_time.append(novel_solve_time)
+
+    gcn_error = sum(avg_gcn_error)/len(avg_gcn_error)
+    gcn_total_time = sum(avg_gcn_time)/len(avg_gcn_time)
+    novel_error = sum(avg_novel_error)/len(avg_novel_error)
+    novel_solve_time = sum(avg_novel_time)/len(avg_novel_time)
+
+    print("GCN:",gcn_error,"SMILE:",novel_error)
+
     write_()
 
     plot_rmse(figname2, batch.y, {"GCN":gcn_pred, "SMILE":novel_pred})
-    plot_out(figname, batch, gcn_pred, f"GCN ({np.round(gcn_error,2)})", novel_pred, f"SMILE ({np.round(novel_error,2)})", indices=indices)
+    plot_out(figname, batch, gcn_pred, f"GCN ({np.round(gcn_error,2)})", novel_pred, f"SMILE ({np.round(novel_error,2)})", indices="error_lines")
