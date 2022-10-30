@@ -18,11 +18,11 @@ if __name__ == "__main__":
     torch.manual_seed(seed_)
 
     print("EXPERIMENT: vary num nodes")
-    filename = "vary_num_nodes.txt"
-    figname1 = "vary_num_nodes.pdf"
+    filename = "vary_num_nodes1.txt"
+    figname1 = "vary_num_nodes1.pdf"
     # figname2 = "vary_num_nodes_runtime1.jpg"
 
-    num_nodes_list = [50,100,250,500,750,1000]
+    num_nodes_list = [50,100,250,500,750,1000,1250,1500]
     num_anchors_percent = 10
     # set num_anchors as 10% of num nodes
     loss_fn = torch.nn.MSELoss()
@@ -103,7 +103,7 @@ if __name__ == "__main__":
     k1_estimate_list = []
 
     for num_nodes in num_nodes_list:
-        num_anchors = int(num_nodes*(num_anchors_percent/100))
+        num_anchors = int((num_nodes**2)*(num_anchors_percent/100))
         print("num_nodes:",num_nodes,"num_anchors:",num_anchors)
 
         data_loader, num_nodes, noisy_distance_matrix, true_k1 = fake_dataset(num_nodes, num_anchors, threshold=threshold, p_nLOS=p_nLOS, std=std, noise_floor_dist=noise_floor_dist)
@@ -150,12 +150,21 @@ if __name__ == "__main__":
     writeLine("Novel error:"+str(novel_list),True)
     writeLine("Novel runtime:"+str(novel_runtime_list),True)
 
-    fig1, ax1 = plt.subplots(figsize=(6,3))
-    ax1.plot(num_nodes_list, novel_runtime_list, marker='o',color=SMILE_COLOR,label="SMILE", linestyle='--')
-    ax1.plot(num_nodes_list, gcn_runtime_list, marker='o',color=GCN_COLOR,label="GCN", linestyle='--')
+    fig1, (ax1, ax2) = plt.subplots(2,1,figsize=(6,5))
+
+    ax1.plot(num_nodes_list, novel_list, marker='o',color=SMILE_COLOR,label="SMILE")
+    ax1.plot(num_nodes_list, gcn_list, marker='o',color=GCN_COLOR,label="GCN")
     ax1.set_xlabel(f'Number of Nodes')
-    ax1.set_ylabel('Runtime')
+    ax1.set_ylabel('RMSE')
     ax1.legend()
+
+    ax2.plot(num_nodes_list, novel_runtime_list, marker='o',color=SMILE_COLOR,label="SMILE", linestyle='--')
+    ax2.plot(num_nodes_list, gcn_runtime_list, marker='o',color=GCN_COLOR,label="GCN", linestyle='--')
+    ax2.set_xlabel(f'Number of Nodes')
+    ax2.set_ylabel('Runtime (sec)')
+    ax2.legend()
+
+
     fig1.tight_layout()
     fig1.savefig(figname1)
     print("plot saved to",figname1)

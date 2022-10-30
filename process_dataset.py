@@ -280,6 +280,8 @@ def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kr
             LOS[tx_id][rx_id] = 1
             pathlosses.append(pathloss)
             distances.append(np.sum((true_locs[tx_id]-true_locs[rx_id])**2)**0.5)
+    missing = torch.Tensor(noisy_distance_matrix == 0)
+    missing.fill_diagonal_(0)
 
     del data
 
@@ -333,7 +335,7 @@ def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kr
         print("measured mean mean & std dev",np.mean(meas_err),np.std(meas_err))
 
         if augment:
-            loc, scale = -6.259985, 36.173862
+            loc, scale = 0, 36.173862 #-6.259985, 36.173862
             print(f"fill in missing measurements with noise from N({loc},{scale**2})")
             noise_for_augment = np.random.normal(loc=loc,scale=scale,size=(num_nodes,num_nodes))
             noise_for_augment = torch.Tensor(noise_for_augment)
@@ -356,7 +358,7 @@ def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kr
 
     else:
         if augment:
-            loc, scale = -6.259985, 36.173862
+            loc, scale = 0, 36.173862 #-6.259985, 36.173862
             if verbose:
                 print(f"fill in missing measurements with noise from N({loc},{scale**2})")
             noise_for_augment = np.random.normal(loc=loc,scale=scale,size=(num_nodes,num_nodes))
@@ -368,6 +370,29 @@ def load_a_moment(filename='datasets/sep18d_clean.csv', moment=1165, eta=3.2, Kr
                 print("FILL MAX:", fill_max)
             noisy_distance_matrix[noisy_distance_matrix==0] = fill_max
         noisy_distance_matrix.fill_diagonal_(0)
+
+    if plot:
+        fig2, ax4 = plt.subplots(1,1,figsize=(6,3))
+        # noise = noisy_distance_matrix.flatten() - true_dist.flatten()
+        noise_LOS = noisy_distance_matrix[LOS==1] - true_dist[LOS==1]
+        noise_nLOS = noisy_distance_matrix[nLOS==1] - true_dist[nLOS==1]
+        noise_missing = noisy_distance_matrix[missing==1] - true_dist[missing==1]
+
+        ax4.hist([noise_LOS.flatten().numpy(), noise_nLOS.flatten().numpy(), noise_missing.flatten().numpy()],
+            bins=40,
+            color=["blue","black","grey"],
+            label=["LOS","NLOS","Missing"])
+        # ax4.hist(np.vstack([noise[LOS.flatten()==1],noise[nLOS.flatten()==1]]),
+        #     bins=50,
+        #     color=["blue","black"],
+        #     label=["LOS","NLOS"])
+        # ax4.hist(noise[nLOS.flatten()==1],bins=50,color="black", label="NLOS")
+        # ax4.hist(noise[LOS.flatten()==0][nLOS.flatten()==0],bins=121,color="grey",label="missing")
+        ax4.set_xlabel("Measurement error (m)")
+        ax4.set_ylabel("Frequency")
+        ax4.legend()
+        fig2.tight_layout()
+        fig2.savefig("robot_error.pdf")
 
     features = noisy_distance_matrix.clone()
     adjacency_matrix = features < threshold
@@ -489,4 +514,4 @@ if __name__=="__main__":
     print("executing process_dataset.py")
     # data_loader, num_nodes, noisy_distance_matrix, true_k1 = fake_dataset(500, 50, threshold=1.2, p_nLOS=10)
     # load_cellphone_data(num_anchors=3, threshold=10, plot=True)
-    load_a_moment(eta=4.57435973, Kref=13.111276899657597, plot=True, verbose=True, augment=True)
+    load_a_moment(eta=4.57435973, Kref=13.111276899657597, plot=True, verbose=True, augment=False)

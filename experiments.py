@@ -98,20 +98,27 @@ def plot_out(figname, batch, left_pred, left_title, right_pred, right_title, ind
     left.scatter(left_actual[num_anchors:,0].detach().numpy(), left_actual[num_anchors:,1].detach().numpy(), label="true node",color=TRUE_COLOR)
     left.scatter(left_pred[num_anchors:,0].detach().numpy(), left_pred[num_anchors:,1].detach().numpy(), label="pred node",color=GCN_COLOR)
     left.set_title(left_title)
-    left.legend(ncol=2)
+    # left.legend(ncol=2)
     right.scatter(right_actual[:num_anchors,0].detach().numpy(), right_actual[:num_anchors,1].detach().numpy(), label="true anchor", marker="x",color=TRUE_COLOR)
     right.scatter(right_pred[:num_anchors,0].detach().numpy(), right_pred[:num_anchors,1].detach().numpy(), label="pred anchor", marker="+",color=SMILE_COLOR)
     right.scatter(right_actual[num_anchors:,0].detach().numpy(), right_actual[num_anchors:,1].detach().numpy(), label="true node",color=TRUE_COLOR)
     right.scatter(right_pred[num_anchors:,0].detach().numpy(), right_pred[num_anchors:,1].detach().numpy(), label="pred node",color=SMILE_COLOR)
     right.set_title(right_title)
-    right.legend(ncol=2)
+    # right.legend(ncol=2)
     # handles1, labels1 = right.get_legend_handles_labels()
     # handles2, labels2 = left.get_legend_handles_labels()
     # print(handles1, labels1)
     # handles, labels = set(handles1+handles2), set(labels1+labels2)
     # fig.legend(handles, labels, loc='lower center', ncol=4)
 
-    if indices is not None:
+    if indices == "error_lines":
+        print("trying to print error lines")
+        num_nodes = len(batch.y)
+        for i in range(num_nodes):
+            left.plot([batch.y[i,0],left_pred[i,0]], [batch.y[i,1], left_pred[i,1]], color=GCN_COLOR, alpha=0.2)
+            right.plot([batch.y[i,0],right_pred[i,0]], [batch.y[i,1], right_pred[i,1]], color=SMILE_COLOR, alpha=0.2)
+
+    elif indices is not None:
 
         # visualize adjacency matrix
         num_nodes = len(batch.y)
